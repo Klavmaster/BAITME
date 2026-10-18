@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { restaurants, Restaurant, MenuItem } from '../src/data/demo';
+import LiveHome from '../src/LiveHome';
 import { calculateBreakdown, estimateProcessingFeeCents, formatEuro } from '../src/lib/pricing';
 
 const PURPLE = '#6B4FEF';
@@ -25,7 +26,7 @@ function RoundedButton({ title, onPress, subtle = false }: {
   );
 }
 
-export default function CustomerHome() {
+function DemoCustomerHome() {
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('Visi');
   const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
@@ -296,3 +297,8 @@ const styles = StyleSheet.create({
   lightButton: { backgroundColor: '#EEEAFD' },
   lightButtonText: { color: PURPLE },
 });
+
+export default function CustomerHome(){
+  return process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+    ? <LiveHome/> : <DemoCustomerHome/>;
+}
