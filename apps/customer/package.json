@@ -20,7 +20,13 @@
     "react-native-web": "~0.21.0",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
-    "react-native-gesture-handler": "~2.32.0"
+    "react-native-gesture-handler": "~2.32.0",
+    "expo-constants": "~57.0.9",
+    "expo-linking": "~57.0.5",
+    "expo-splash-screen": "~57.0.5",
+    "expo-system-ui": "~57.0.2",
+    "react-native-reanimated": "4.5.1",
+    "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
     "typescript": "~6.0.3",
