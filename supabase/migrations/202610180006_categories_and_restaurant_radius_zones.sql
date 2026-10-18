@@ -18,6 +18,12 @@ alter table public.menu_categories enable row level security;
 revoke all on public.menu_categories from anon,authenticated;
 grant select,insert,update,delete on public.menu_categories to service_role;
 
+-- Normalize legacy category labels such as "pusdienu " without changing
+-- any food items or prices. This keeps the menu and category list in sync.
+update public.menu_items
+set category=case when btrim(category)='' then 'Ēdieni' else btrim(category) end
+where category<>btrim(category) or btrim(category)='';
+
 -- Carry existing manually entered menu categories into the new persistent model.
 insert into public.menu_categories(restaurant_id,name,sort_order)
 select restaurant_id,category,(row_number() over(partition by restaurant_id order by category))*10
