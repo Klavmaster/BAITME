@@ -5,7 +5,7 @@ import {StatusBar} from 'expo-status-bar';
 import type {Session} from '@supabase/supabase-js';
 import {api,configured,supabase} from '../src/client';
 type Job={
- id:string;restaurant_id:string;address_line:string;postal_code:string;
+ id:string;restaurant_id:string;address_line?:string;postal_code:string;
  delivery_cents:number;status:string;created_at:string;payment_status?:string;
 };
 const V='#694EEB',D='#242032';
@@ -116,7 +116,7 @@ export default function CourierApp(){
      {!available.length&&<Text style={s.muted}>Pašlaik nav pieejamu piegāžu.</Text>}
      {available.map(j=><View key={j.id} style={s.card}>
        <Text style={s.rowTitle}>Uzdevums #{j.id.slice(0,8)}</Text>
-       <Text style={s.muted}>{j.address_line}, {j.postal_code}</Text>
+       <Text style={s.muted}>{j.address_line ? j.address_line+', ' : 'Precīza adrese pēc pieņemšanas · '}{j.postal_code}</Text>
        <Text style={s.money}>{euro(j.delivery_cents)}</Text>
        <Pressable style={s.button} disabled={busy} onPress={()=>void change(j.id,'claim')}>
         <Text style={s.white}>Pieņemt piegādi</Text></Pressable>
