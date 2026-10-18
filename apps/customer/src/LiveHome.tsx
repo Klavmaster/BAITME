@@ -8,7 +8,10 @@ import {createClient,type Session} from '@supabase/supabase-js';
 type Restaurant={id:string;name:string;description:string;category:string;image_url:string|null;delivery_eta_min:number;delivery_eta_max:number};
 type Item={id:string;name:string;description:string;price_cents:number;category:string};
 type Zone={id:string;name:string;postal_code_prefix:string;delivery_cents:number};
-type Order={id:string;status:string;total_cents:number;created_at:string};
+type Order={id:string;status:string;payment_status:string;total_cents:number;food_cents:number;created_at:string};
+type Complaint={id:string;status:string;category:string;customer_description:string;requested_refund_cents:number;
+ restaurant_response:string|null;restaurant_recommended_cents:number|null;review_note:string|null;approved_refund_cents:number|null;};
+type LocationSample={latitude:number;longitude:number;accuracyM:number;updatedAt:string};
 type MenuResponse={restaurant:Restaurant;items:Item[];deliveryZones:Zone[]};
 
 const V='#694EEB',INK='#242032';
@@ -49,11 +52,16 @@ export default function LiveHome(){
  const [restaurant,setRestaurant]=useState<Restaurant|null>(null);
  const [items,setItems]=useState<Item[]>([]),[zones,setZones]=useState<Zone[]>([]);
  const [zoneId,setZoneId]=useState(''),[basket,setBasket]=useState<Record<string,number>>({});
- const [view,setView]=useState<'home'|'menu'|'cart'|'login'|'orders'>('home');
+ const [view,setView]=useState<'home'|'menu'|'cart'|'login'|'orders'|'complaint'>('home');
  const [search,setSearch]=useState(''),[address,setAddress]=useState(''),[postal,setPostal]=useState('');
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [busy,setBusy]=useState(false),[error,setError]=useState('');
  const [orders,setOrders]=useState<Order[]>([]),[message,setMessage]=useState('');
+ const [complaintOrder,setComplaintOrder]=useState<Order|null>(null);
+ const [complaint,setComplaint]=useState<Complaint|null>(null);
+ const [complaintCategory,setComplaintCategory]=useState('missing_item');
+ const [complaintText,setComplaintText]=useState(''),[refundEuro,setRefundEuro]=useState('');
+ const [locationSample,setLocationSample]=useState<LocationSample|null>(null);
  useEffect(()=>{
   supabase.auth.getSession().then(({data})=>setSession(data.session));
   const {data:{subscription}}=supabase.auth.onAuthStateChange((_e,s)=>setSession(s));
@@ -130,6 +138,42 @@ export default function LiveHome(){
  async function loadOrders(token:string){
   const r=await request<{orders:Order[]}>('/v1/orders/mine',token);
   setOrders(r.orders);
+ }
+ async function openComplaint(order:Order){
+  const token=(await supabase.auth.getSession()).data.session?.access_token;
+  if(!token)return;
+  await guard(async()=>{
+   setComplaintOrder(order);setComplaint(null);setComplaintText('');
+   const r=await request<{complaint:Complaint|null}>('/v1/orders/'+order.id+'/complaint',token);
+   setComplaint(r.complaint);setView('complaint');
+  });
+ }
+ async function sendComplaint(){
+  if(!complaintOrder)return;
+  await guard(async()=>{
+   const token=(await supabase.auth.getSession()).data.session?.access_token;
+   if(!token)throw new Error('Pieslēdzies vēlreiz');
+   const cents=Math.round(Number(refundEuro.replace(',','.'))*100);
+   if(!Number.isSafeInteger(cents)||cents<1||cents>complaintOrder.food_cents)
+    throw new Error('Atmaksas pieprasījums nedrīkst pārsniegt ēdiena summu');
+   await request('/v1/orders/'+complaintOrder.id+'/complaint',token,{
+    method:'POST',body:JSON.stringify({category:complaintCategory,description:complaintText,
+    requestedRefundCents:cents})
+   });
+   const r=await request<{complaint:Complaint|null}>('/v1/orders/'+complaintOrder.id+'/complaint',token);
+   setComplaint(r.complaint);
+   setMessage('Sūdzība iesniegta. Restorāns sniegs atbildi, pēc tam to izskatīs BaitMe operators.');
+  });
+ }
+ async function loadCourierLocation(order:Order){
+  const token=(await supabase.auth.getSession()).data.session?.access_token;
+  if(!token)return;
+  await guard(async()=>{
+   const result=await request<{location:LocationSample|null}>('/v1/orders/'+order.id+'/courier-location',token);
+   setLocationSample(result.location);
+   setMessage(result.location?'Atrašanās vieta saņemta. Tā tiek atjaunota tikai ar kurjera piekrišanu.':
+    'Kurjera atrašanās vieta nav pieejama vai kopīgošana ir izslēgta.');
+  });
  }
  async function showOrders(){
   const token=(await supabase.auth.getSession()).data.session?.access_token;
@@ -209,6 +253,37 @@ export default function LiveHome(){
     <Button disabled={!count||busy||!selectedZone} onPress={()=>void makeDraft()}>Izveidot tikai testa pasūtījumu</Button>
     <Text style={styles.warning}>Tas nav īsts pasūtījums! Ēdiens netiks gatavots un kurjers netiks nosūtīts.</Text>
    </>}
+   {view==='complaint'&&<>
+      <Text style={styles.eyebrow}>Sūdzības izskatīšana</Text>
+      <Text style={styles.title}>Problēma ar pasūtījumu</Text>
+      <Text style={styles.muted}>Pasūtījums #{complaintOrder?.id.slice(0,8)}</Text>
+      {complaint?<View style={styles.card}>
+        <Text style={styles.cardTitle}>Statuss: {complaint.status}</Text>
+        <Text style={styles.muted}>Pieprasīts: {money(complaint.requested_refund_cents)}</Text>
+        <Text style={styles.muted}>{complaint.customer_description}</Text>
+        {complaint.restaurant_response&&<><Text style={styles.cardTitle}>Restorāna atbilde</Text>
+          <Text style={styles.muted}>{complaint.restaurant_response}</Text></>}
+        {complaint.review_note&&<><Text style={styles.cardTitle}>Izmeklēšanas lēmums</Text>
+          <Text style={styles.muted}>{complaint.review_note}</Text></>}
+        {complaint.approved_refund_cents!=null&&<Text style={styles.price}>
+          Apstiprināta daļējā atmaksa: {money(complaint.approved_refund_cents)}</Text>}
+        {complaint.status==='approved_pending_refund'&&<Text style={styles.warning}>
+          Lēmums apstiprināts, taču maksājums vēl nav nosūtīts uz Stripe. Atmaksas termiņu skaita no tās uzsākšanas, nevis lēmuma dienas.</Text>}
+        {complaint.status==='refund_submitted'&&<Text style={styles.muted}>
+          Atmaksa nosūtīta maksājumu apstrādātājam. Parasti 5–10 darba dienas (aptuveni 14 kalendārās), atkarībā no bankas var ilgāk.</Text>}
+      </View>:<>
+        <Text style={styles.subtitle}>Kas notika?</Text>
+        {([['missing_item','Trūkst ēdiena'],['wrong_item','Nepareizs ēdiens'],['quality','Kvalitāte'],['delivery_issue','Piegādes problēma'],['other','Cits']] as const)
+         .map(([key,label])=><Pressable key={key} onPress={()=>setComplaintCategory(key)}
+           style={[styles.zone,complaintCategory===key&&styles.zoneSelected]}>
+           <Text style={styles.cardTitle}>{complaintCategory===key?'◉':'○'} {label}</Text></Pressable>)}
+        <TextInput style={[styles.input,{minHeight:120}]} multiline placeholder="Apraksti problēmu (vismaz 15 simboli)" value={complaintText} onChangeText={setComplaintText}/>
+        <TextInput style={styles.input} keyboardType="decimal-pad" placeholder="Vēlamā daļējā atmaksa €" value={refundEuro} onChangeText={setRefundEuro}/>
+        <Text style={styles.muted}>Restorāns atbildēs, un BaitMe operators izskatīs pieprasījumu. Restorāns pats neveic automātisku atmaksu.</Text>
+        <Button disabled={busy||complaintText.trim().length<15} onPress={()=>void sendComplaint()}>Iesniegt sūdzību</Button>
+      </>}
+      <Button secondary onPress={()=>setView('orders')}>Atpakaļ uz pasūtījumiem</Button>
+   </>}
    {view==='login'&&<>
     <Text style={styles.title}>Klienta konts</Text>
     <Text style={styles.muted}>Lai saglabātu testa pasūtījumu, pieslēdzies.</Text>
@@ -225,7 +300,18 @@ export default function LiveHome(){
     {orders.map(o=><View key={o.id} style={styles.card}>
      <Text style={styles.cardTitle}>#{o.id.slice(0,8)}</Text>
      <Text style={styles.muted}>{o.status} · {money(o.total_cents)}</Text>
+     {['paid','partially_refunded'].includes(o.payment_status)&&<>
+       <Button secondary onPress={()=>void openComplaint(o)}>Sūdzība / atmaksa</Button>
+       {['ready_for_pickup','picked_up'].includes(o.status)&&
+         <Button secondary onPress={()=>void loadCourierLocation(o)}>Atjaunot kurjera atrašanās vietu</Button>}
+     </>}
     </View>)}
+    {locationSample&&<View style={styles.card}>
+      <Text style={styles.cardTitle}>Kurjera atrašanās vieta</Text>
+      <Text style={styles.muted}>{locationSample.latitude.toFixed(5)}, {locationSample.longitude.toFixed(5)}</Text>
+      <Text style={styles.muted}>Precizitāte: {Math.round(locationSample.accuracyM)} m. Aktualizēts: {new Date(locationSample.updatedAt).toLocaleTimeString('lv-LV')}</Text>
+      <Text style={styles.muted}>Kartes attēlojums tiks pieslēgts nākamajā fāzē.</Text>
+    </View>}
     {session&&<Button secondary onPress={()=>void supabase.auth.signOut()}>Iziet no konta</Button>}
     <Button onPress={()=>setView('home')}>Atpakaļ uz sākumu</Button>
    </>}
