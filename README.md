@@ -6,6 +6,8 @@ BaitMe Latvijā: klientam restorāna ēdiena cena un piegāde; restorānam ēdie
 
 🚀 **[SĀKT ŠEIT — uzstādīšanas instrukcija latviski](docs/START-HERE-LV.md)**
 
+**Staging:** [Railway/Supabase serveru savienojums](docs/BAITME-STAGING-CONNECTION.md) un `npm run setup:staging` mobilajām aplikācijām. Servera slepenā atslēga ievadāma tikai Railway Variables; ne GitHub.
+
 ## Jaunie noteikumi (18.10.2026)
 
 - Klients ievada precīzu adresi (pašlaik iela/māja un LV pasta indekss, bez ģeokodēšanas verifikācijas).

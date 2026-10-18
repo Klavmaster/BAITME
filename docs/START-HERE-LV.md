@@ -1,5 +1,7 @@
 # BaitMe — palaišana soli pa solim (2026-10-18)
 
+**Jau izveidota staging vide:** [Railway/Supabase pieslēgšanas statusi un droša servera noslēpuma instrukcija](BAITME-STAGING-CONNECTION.md). Klienta lokālai konfigurācijai: `npm run setup:staging` (pēc `npm install`).
+
 ## 1. Kas jau ir uzrakstīts
 
 - **Klients:** Expo mobilā lietotne ar sākuma demonstrācijas režīmu; pēc pieslēgumu norādīšanas restorānu un ēdienkartes ielasa no API, ir Supabase reģistrācija, autorizācija, grozs, pasta indeksa zonu izvēle un neapmaksāta testa pasūtījuma uzmetums.

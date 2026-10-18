@@ -34,6 +34,27 @@ async function requireUser(req,res,next) {
   } catch(error){next(error);}
 }
 app.get("/health",(_req,res)=>res.json({ok:true,app:"baitme",payments:false}));
+/**
+ * Readiness differs from liveness: Railway can start before a Supabase server
+ * secret is configured. Never report database-ready until a service-role query
+ * succeeds. Stripe stays OFF independent of readiness.
+ */
+app.get("/ready",wrap(async(_req,res)=>{
+  const configured=Boolean(
+    process.env.SUPABASE_URL &&
+    (process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY) &&
+    (process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY)
+  );
+  if(!configured) return res.status(503).json({ready:false,database:false,payments:false});
+  try {
+    const {error}=await db().from("restaurants").select("id",{head:true,count:"exact"});
+    if(error) throw error;
+    return res.json({ready:true,database:true,payments:false});
+  } catch(error) {
+    console.error("[baitme readiness]",error?.code||error?.name||"database_unavailable");
+    return res.status(503).json({ready:false,database:false,payments:false});
+  }
+}));
 app.get("/v1/restaurants",wrap(async(req,res)=>{
   const {data,error}=await db().from("restaurants")
     .select("id,slug,name,description,category,image_url,delivery_eta_min,delivery_eta_max")

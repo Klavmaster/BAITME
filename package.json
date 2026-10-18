@@ -18,6 +18,7 @@
     "api": "npm run start:dev --workspace @baitme/api",
     "test": "node --test tests/*.test.cjs tests/*.test.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "build:business": "npm run build --workspace @baitme/business-web"
+    "build:business": "npm run build --workspace @baitme/business-web",
+    "setup:staging": "node scripts/setup-staging.mjs"
   }
 }
