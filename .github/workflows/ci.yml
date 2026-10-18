@@ -64,6 +64,8 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180003_applications.sql
       - name: Run complaints and location migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180004_complaints_tracking.sql
+      - name: Run fixed restaurant fee migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180005_fixed_restaurant_fee.sql
       - name: End-to-end domain/authorization/ledger assertions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/order-lifecycle.sql
       - name: Complaint and courier GPS integration checks

@@ -11,6 +11,7 @@ declare
   v_order uuid;
   v_order_record public.orders%rowtype;
   v_earning public.courier_earnings%rowtype;
+  v_platform public.platform_fee_ledger%rowtype;
 begin
   insert into auth.users(id) values (v_owner),(v_customer),(v_courier);
   insert into public.restaurants(owner_user_id,slug,name,published)
@@ -53,13 +54,23 @@ begin
   perform public.courier_baitme_transition(v_courier,v_order,'picked_up');
 
   if exists(select 1 from public.courier_earnings where order_id=v_order)
-    then raise exception 'courier earned before completed delivery'; end if;
+    or exists(select 1 from public.platform_fee_ledger where order_id=v_order)
+    or (select platform_fee_cents from public.orders where id=v_order)<>0
+    then raise exception 'fees accrued before delivery'; end if;
 
   perform public.courier_baitme_transition(v_courier,v_order,'delivered');
   select * into v_earning from public.courier_earnings where order_id=v_order;
   if v_earning.amount_cents<>350 or v_earning.courier_id<>v_courier or
     v_earning.payout_status<>'unpaid'
   then raise exception 'courier ledger incorrect'; end if;
+
+  select * into v_platform from public.platform_fee_ledger where order_id=v_order;
+  if v_platform.amount_cents<>50 or v_platform.state<>'accrued'
+    or (select platform_fee_cents from public.orders where id=v_order)<>50
+  then raise exception 'BaitMe EUR 0.50 fee not accrued'; end if;
+  if (select food_cents - restaurant_processing_fee_cents - platform_fee_cents
+    from public.orders where id=v_order)<>1950
+  then raise exception 'restaurant net after platform fee wrong'; end if;
 
   begin
     perform public.courier_baitme_transition(v_courier,v_order,'delivered');
@@ -69,11 +80,12 @@ begin
   end;
 
   if (select count(*) from public.courier_earnings where order_id=v_order)<>1
-    then raise exception 'duplicate earning created'; end if;
+    or (select count(*) from public.platform_fee_ledger where order_id=v_order)<>1
+    then raise exception 'duplicate courier/platform fee accrued'; end if;
 
   if has_table_privilege('anon','public.orders','select') or
      has_table_privilege('authenticated','public.orders','select') or
      has_table_privilege('anon','public.restaurants','select')
     then raise exception 'direct public table access not locked down'; end if;
-  raise notice 'BaitMe DB E2E passed: paid order, courier claim, delivery and one earning';
+  raise notice 'BaitMe DB E2E passed: paid order, courier claim, delivery, EUR 0.50 fixed fee accrued exactly once';
 end $$;

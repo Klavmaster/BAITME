@@ -238,14 +238,15 @@ app.get("/v1/restaurant/:restaurantId/summary",requireUser,wrap(async(req,res)=>
   if(!uuid(id))return fail(res,400,"Nederīgs ID");
   if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
   const {data,error}=await db().from("orders")
-    .select("status,payment_status,food_cents,restaurant_processing_fee_cents,delivery_cents,total_cents")
+    .select("status,payment_status,food_cents,restaurant_processing_fee_cents,platform_fee_cents,delivery_cents,total_cents")
     .eq("restaurant_id",id).limit(2000);
   if(error)return controlledError(res,error);
   const paid=data.filter(x=>x.payment_status==="paid"||x.payment_status==="partially_refunded");
   res.json({summary:{
     totalOrders:data.length,paidOrders:paid.length,foodCents:paid.reduce((a,x)=>a+x.food_cents,0),
     processorCents:paid.reduce((a,x)=>a+x.restaurant_processing_fee_cents,0),
-    netRestaurantCents:paid.reduce((a,x)=>a+x.food_cents-x.restaurant_processing_fee_cents,0),
+    baitmePlatformFeeCents:paid.reduce((a,x)=>a+x.platform_fee_cents,0),
+    netRestaurantCents:paid.reduce((a,x)=>a+x.food_cents-x.restaurant_processing_fee_cents-x.platform_fee_cents,0),
     pendingOrders:data.filter(x=>["placed","accepted","preparing","ready_for_pickup"].includes(x.status)).length
   }});
 }));
@@ -254,7 +255,7 @@ app.get("/v1/restaurant/:restaurantId/orders",requireUser,wrap(async(req,res)=>{
   if(!uuid(id))return fail(res,400,"Nederīgs ID");
   if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav restorāna piekļuves");
   const {data,error}=await db().from("orders")
-    .select("id,status,payment_status,address_line,postal_code,food_cents,restaurant_processing_fee_cents,delivery_cents,total_cents,created_at,order_items(name,unit_price_cents,quantity)")
+    .select("id,status,payment_status,address_line,postal_code,food_cents,restaurant_processing_fee_cents,platform_fee_cents,delivery_cents,total_cents,created_at,order_items(name,unit_price_cents,quantity)")
     .eq("restaurant_id",id).order("created_at",{ascending:false}).limit(100);
   if(error)return controlledError(res,error);
   res.json({orders:data});
