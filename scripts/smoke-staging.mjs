@@ -47,6 +47,15 @@ async function check(){
  const forbidden=await get(api+'/v1/me');
  assert.equal(forbidden.status,401,'Private profile must reject anonymous clients');
 
+ // Ensure the NEW category/location endpoints are deployed, and privileged
+ // configuration remains inaccessible without a valid user session.
+ const unknownRestaurant='00000000-0000-4000-8000-000000000000';
+ for(const route of ['categories','location','zones']){
+  const denied=await get(api+'/v1/restaurant/'+unknownRestaurant+'/'+route);
+  assert.equal(denied.status,401,
+   'Private restaurant '+route+' endpoint must exist and reject anonymous access');
+ }
+
  const home=await get(web+'/');
  assert.equal(home.status,200,'Business website must return HTTP 200');
  assert.match(home.text,/baitme|bait.{0,30}me/i,'Business website should render BaitMe');
