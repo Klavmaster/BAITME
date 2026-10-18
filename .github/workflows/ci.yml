@@ -60,5 +60,7 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180001_baitme_init.sql
       - name: Run security migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180002_security_lockdown.sql
+      - name: Run applications and admin migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180003_applications.sql
       - name: End-to-end domain/authorization/ledger assertions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/order-lifecycle.sql
