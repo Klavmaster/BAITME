@@ -6,6 +6,9 @@ type Menu={id:string;name:string;description:string;category:string;price_cents:
 type Zone={id:string;name:string;postal_code_prefix:string;delivery_cents:number;active:boolean};
 type Order={id:string;status:string;payment_status:string;food_cents:number;delivery_cents:number;total_cents:number;address_line:string;postal_code:string;order_items:{name:string;quantity:number}[]};
 type Summary={totalOrders:number;paidOrders:number;foodCents:number;pendingOrders:number};
+type Complaint={id:string;order_id:string;category:string;customer_description:string;
+ requested_refund_cents:number;status:string;restaurant_response:string|null;
+ restaurant_recommended_cents:number|null;review_note:string|null;approved_refund_cents:number|null;created_at:string};
 const API=process.env.NEXT_PUBLIC_API_URL||"";
 const URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"";
 const KEY=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
@@ -21,8 +24,11 @@ export default function Page(){
  const [email,setEmail]=useState(""),[password,setPassword]=useState("");
  const [error,setError]=useState("");
  const [restaurants,setRestaurants]=useState<Restaurant[]>([]),[rid,setRid]=useState("");
- const [tab,setTab]=useState<"orders"|"menu"|"zones">("orders");
+ const [tab,setTab]=useState<"orders"|"menu"|"zones"|"complaints">("orders");
  const [orders,setOrders]=useState<Order[]>([]);
+ const [complaints,setComplaints]=useState<Complaint[]>([]);
+ const [responses,setResponses]=useState<Record<string,string>>({});
+ const [recommendations,setRecommendations]=useState<Record<string,string>>({});
  const [menu,setMenu]=useState<Menu[]>([]);
  const [zones,setZones]=useState<Zone[]>([]);
  const [summary,setSummary]=useState<Summary>({totalOrders:0,paidOrders:0,foodCents:0,pendingOrders:0});
@@ -50,13 +56,14 @@ export default function Page(){
   finally{setBusy(false);}
  }
  async function loadRestaurant(id:string){
-  const [o,m,z,stats]=await Promise.all([
+  const [o,m,z,stats,cases]=await Promise.all([
    api<{orders:Order[]}>("/v1/restaurant/"+id+"/orders"),
    api<{items:Menu[]}>("/v1/restaurant/"+id+"/menu"),
    api<{zones:Zone[]}>("/v1/restaurant/"+id+"/zones"),
-   api<{summary:Summary}>("/v1/restaurant/"+id+"/summary")
+   api<{summary:Summary}>("/v1/restaurant/"+id+"/summary"),
+   api<{complaints:Complaint[]}>("/v1/restaurant/"+id+"/complaints")
   ]);
-  setOrders(o.orders);setMenu(m.items);setZones(z.zones);setSummary(stats.summary);
+  setOrders(o.orders);setMenu(m.items);setZones(z.zones);setSummary(stats.summary);setComplaints(cases.complaints);
  }
  useEffect(()=>{
   if(!session){setRestaurants([]);setRid("");return;}
@@ -129,7 +136,7 @@ export default function Page(){
       <div className="panel"><p className="eyebrow">Pasūtījumi</p><p className="kpi">{summary.totalOrders}</p><p className="muted">{summary.paidOrders} apmaksāti</p></div>
       <div className="panel"><p className="eyebrow">Aktīvie pasūtījumi</p><p className="kpi">{summary.pendingOrders}</p><p className="muted">Nepabeigtās piegādes</p></div>
     </div>
-    <div className="tabs">{([["orders","Pasūtījumi"],["menu","Ēdienkarte"],["zones","Piegādes zonas"]] as const)
+    <div className="tabs">{([["orders","Pasūtījumi"],["menu","Ēdienkarte"],["zones","Piegādes zonas"],["complaints","Sūdzības"]] as const)
       .map(([id,label])=><button key={id} className={"tab "+(tab===id?"active":"")} onClick={()=>setTab(id)}>{label}</button>)}</div>
     {tab==="orders"&&<section className="panel"><h2>Pasūtījumu saraksts</h2>
      {!orders.length&&<div className="empty">Pasūtījumu vēl nav.</div>}
@@ -170,6 +177,44 @@ export default function Page(){
         });
        }}>Mainīt cenu</button>
       </div></div>)}
+    </section>}
+    {tab==="complaints"&&<section className="panel">
+      <h2>Sūdzības un daļējās atmaksas</h2>
+      <p className="notice">Restorāns sniedz skaidrojumu un iesaka atmaksas summu. Tikai BaitMe operators pieņem galīgo lēmumu pēc izmeklēšanas. Stripe atmaksa NAV aktivizēta.</p>
+      {complaints.length===0&&<p className="empty">Pašlaik nav sūdzību.</p>}
+      {complaints.map(c=><div key={c.id} className="panel" style={{marginTop:12}}>
+       <div className="row"><div><strong>Pasūtījums #{c.order_id.slice(0,8)}</strong> <span className="badge">{c.status}</span>
+         <small>Kategorija: {c.category} · Pieprasītā summa: {money(c.requested_refund_cents)}</small>
+         <p>{c.customer_description}</p>
+       </div></div>
+       {c.restaurant_response&&<div className="notice"><strong>Restorāna atbilde:</strong> {c.restaurant_response}
+        <p>Ieteiktā daļējā atmaksa: {money(c.restaurant_recommended_cents||0)}</p></div>}
+       {c.review_note&&<p className="muted">Izmeklēšanas lēmums: {c.review_note}</p>}
+       {c.approved_refund_cents!=null&&<p className="muted">Apstiprināts: {money(c.approved_refund_cents)}. Stripe izmaksa jāizpilda atsevišķi.</p>}
+       {c.status==="awaiting_restaurant"&&<form onSubmit={e=>{
+         e.preventDefault();
+         void call(async()=>{
+          const amount=Number((recommendations[c.id]||"0").replace(",","."));
+          const cents=Math.round(amount*100);
+          if(!Number.isFinite(amount)||!Number.isSafeInteger(cents)||cents<0)
+           throw Error("Nederīga atmaksas summa");
+          await api("/v1/restaurant/"+rid+"/complaints/"+c.id+"/respond",{
+           method:"POST",body:JSON.stringify({
+            response:responses[c.id]||"",recommendedRefundCents:cents
+           })
+          });
+          await loadRestaurant(rid);
+         });
+       }} className="fields">
+        <div className="field" style={{flexBasis:"100%"}}><label>Restorāna skaidrojums (vismaz 10 simboli)</label>
+         <textarea required minLength={10} rows={4} value={responses[c.id]||""}
+          onChange={e=>setResponses(v=>({...v,[c.id]:e.target.value}))}/></div>
+        <div className="field"><label>Ieteiktā daļējā atmaksa € (0 = atteikt)</label>
+         <input required type="text" inputMode="decimal" value={recommendations[c.id]||""} placeholder="0,00"
+          onChange={e=>setRecommendations(v=>({...v,[c.id]:e.target.value}))}/></div>
+        <button disabled={busy} className="primary">Nosūtīt skaidrojumu izmeklēšanai</button>
+       </form>}
+      </div>)}
     </section>}
     {tab==="zones"&&<section className="panel"><h2>Piegādes zonas</h2>
       <p className="muted">Pagaidu MVP: LV pasta indeksa prefikss. Pirms reālas piegādes vajadzīga precīza adreses pārbaude un attāluma aprēķins.</p>
