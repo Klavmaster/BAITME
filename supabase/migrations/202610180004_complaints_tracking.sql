@@ -162,7 +162,7 @@ create or replace function public.upsert_baitme_courier_location(
 declare v_id uuid;
 begin
  if p_lat is null or p_lng is null or p_accuracy is null
-   or not isfinite(p_lat) or not isfinite(p_lng) or not isfinite(p_accuracy)
+   -- Range checks reject NaN and infinities in PostgreSQL float ordering.
    or p_lat not between -90 and 90 or p_lng not between -180 and 180
    or p_accuracy not between 0 and 1000
  then raise exception 'invalid location'; end if;
