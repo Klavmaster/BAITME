@@ -66,7 +66,11 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180004_complaints_tracking.sql
       - name: Run fixed restaurant fee migration
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180005_fixed_restaurant_fee.sql
+      - name: Run menu categories and radius-zone migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180006_categories_and_restaurant_radius_zones.sql
       - name: End-to-end domain/authorization/ledger assertions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/order-lifecycle.sql
       - name: Complaint and courier GPS integration checks
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/complaints-tracking.sql
+      - name: Tenant category ordering and restaurant radius zone checks
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/categories-and-zones.sql
