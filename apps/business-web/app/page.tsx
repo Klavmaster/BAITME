@@ -4,8 +4,8 @@ import {createClient,type SupabaseClient,type Session} from "@supabase/supabase-
 type Restaurant={id:string;name:string;role:string;published:boolean;slug:string};
 type Menu={id:string;name:string;description:string;category:string;price_cents:number;available:boolean};
 type Zone={id:string;name:string;postal_code_prefix:string;delivery_cents:number;active:boolean};
-type Order={id:string;status:string;payment_status:string;food_cents:number;delivery_cents:number;total_cents:number;address_line:string;postal_code:string;order_items:{name:string;quantity:number}[]};
-type Summary={totalOrders:number;paidOrders:number;foodCents:number;pendingOrders:number};
+type Order={id:string;status:string;payment_status:string;food_cents:number;restaurant_processing_fee_cents:number;delivery_cents:number;total_cents:number;address_line:string;postal_code:string;order_items:{name:string;quantity:number}[]};
+type Summary={totalOrders:number;paidOrders:number;foodCents:number;processorCents:number;netRestaurantCents:number;pendingOrders:number};
 type Complaint={id:string;order_id:string;category:string;customer_description:string;
  requested_refund_cents:number;status:string;restaurant_response:string|null;
  restaurant_recommended_cents:number|null;review_note:string|null;approved_refund_cents:number|null;created_at:string};
@@ -31,7 +31,7 @@ export default function Page(){
  const [recommendations,setRecommendations]=useState<Record<string,string>>({});
  const [menu,setMenu]=useState<Menu[]>([]);
  const [zones,setZones]=useState<Zone[]>([]);
- const [summary,setSummary]=useState<Summary>({totalOrders:0,paidOrders:0,foodCents:0,pendingOrders:0});
+ const [summary,setSummary]=useState<Summary>({totalOrders:0,paidOrders:0,foodCents:0,processorCents:0,netRestaurantCents:0,pendingOrders:0});
  const [itemName,setItemName]=useState(""),[itemPrice,setItemPrice]=useState(""),[itemCategory,setItemCategory]=useState("Burgeri");
  const [zoneName,setZoneName]=useState(""),[zonePrefix,setZonePrefix]=useState("LV-10"),[zonePrice,setZonePrice]=useState("3.50");
  useEffect(()=>{
@@ -132,7 +132,7 @@ export default function Page(){
      <button className="secondary" disabled={busy||!rid} onClick={()=>void call(()=>loadRestaurant(rid))}>Atjaunot</button>
     </div>:<p className="notice">Tavam kontam nav piešķirta piekļuve restorānam. Administrators pievieno kontu restaurant_staff tabulā.</p>}
     {current&&<><div className="grid">
-      <div className="panel green"><p className="eyebrow">Pārtikas apgrozījums (apmaksātie)</p><p className="kpi">{money(summary.foodCents)}</p><p className="muted">Restorāna ēdienu summas, pirms atmaksām</p></div>
+      <div className="panel green"><p className="eyebrow">Pārtikas apgrozījums (apmaksātie)</p><p className="kpi">{money(summary.netRestaurantCents)}</p><p className="muted">Restorāna ēdiena summa {money(summary.foodCents)} mīnus pārbaudītās Stripe apstrādes izmaksas {money(summary.processorCents)}; pirms atmaksām. Kamēr Stripe nav pieslēgts, izmaksas vēl ir 0 €.</p></div>
       <div className="panel"><p className="eyebrow">Pasūtījumi</p><p className="kpi">{summary.totalOrders}</p><p className="muted">{summary.paidOrders} apmaksāti</p></div>
       <div className="panel"><p className="eyebrow">Aktīvie pasūtījumi</p><p className="kpi">{summary.pendingOrders}</p><p className="muted">Nepabeigtās piegādes</p></div>
     </div>
@@ -144,7 +144,7 @@ export default function Page(){
       <strong>#{o.id.slice(0,8)}</strong> <span className="badge">{o.status}</span>
       <small>{o.address_line}, {o.postal_code} · {o.payment_status}</small>
       <small>{o.order_items?.map(i=>i.quantity+" × "+i.name).join(" · ")}</small>
-      <small>Ēdiens: {money(o.food_cents)} · Piegāde: {money(o.delivery_cents)}</small>
+      <small>Ēdiens: {money(o.food_cents)} · Stripe apstrāde (restorānam): {money(o.restaurant_processing_fee_cents)} · Piegāde: {money(o.delivery_cents)}</small>
       </div><div className="cardActions"><strong>{money(o.total_cents)}</strong>
       {o.payment_status==="paid"&&flow[o.status]&&<button className="primary" disabled={busy} onClick={()=>void call(async()=>{
        await api("/v1/restaurant/"+rid+"/orders/"+o.id+"/status",{method:"POST",body:JSON.stringify({status:flow[o.status]})});
