@@ -10,6 +10,14 @@
       "ios",
       "android",
       "web"
+    ],
+    "plugins": [
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "BaitMe Kurjers izmanto GPS tikai pēc kurjera piekrišanas aktīvas piegādes laikā."
+        }
+      ]
     ]
   }
 }

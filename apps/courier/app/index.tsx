@@ -1,4 +1,5 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useRef,useState} from 'react';
+import * as Location from 'expo-location';
 import {SafeAreaView,Text,TextInput,View,ScrollView,Pressable,StyleSheet,ActivityIndicator} from 'react-native';
 import {StatusBar} from 'expo-status-bar';
 import type {Session} from '@supabase/supabase-js';
@@ -15,6 +16,10 @@ export default function CourierApp(){
  const [email,setEmail]=useState(''),[password,setPassword]=useState('');
  const [available,setAvailable]=useState<Job[]>([]),[mine,setMine]=useState<Job[]>([]);
  const [error,setError]=useState('');
+ const [trackingId,setTrackingId]=useState<string|null>(null);
+ const trackingRef=useRef<Location.LocationSubscription|null>(null);
+ const trackingIdRef=useRef<string|null>(null);
+ const [locationPermission,setLocationPermission]=useState('Nav pieprasīta');
  useEffect(()=>{
   if(!supabase){setLoading(false);return;}
   supabase.auth.getSession().then(({data})=>{setSession(data.session);setLoading(false);});
@@ -38,6 +43,45 @@ export default function CourierApp(){
   }catch(e){setError(e instanceof Error?e.message:'Savienojuma kļūda');}
   finally{setBusy(false);}
  }
+ useEffect(()=>()=>{trackingRef.current?.remove();trackingRef.current=null;},[]);
+ async function stopTracking(orderId:string){
+  const previous=trackingIdRef.current;
+  trackingIdRef.current=null;trackingRef.current?.remove();trackingRef.current=null;
+  setTrackingId(null);
+  if(previous===orderId&&session?.access_token){
+   try{await api('/v1/courier/jobs/'+orderId+'/location',session.access_token,{method:'DELETE'});}
+   catch(_e){setError('Kopīgošana apturēta telefonā. Servera dati automātiski novecos.');}
+  }
+ }
+ async function startTracking(order:Job){
+  if(!session||!['ready_for_pickup','picked_up'].includes(order.status))return;
+  setError('');
+  try{
+   if(trackingIdRef.current)await stopTracking(trackingIdRef.current);
+   const permission=await Location.requestForegroundPermissionsAsync();
+   if(permission.status!=='granted'){
+    setLocationPermission('Atļauja atteikta');return;
+   }
+   trackingIdRef.current=order.id;setTrackingId(order.id);
+   setLocationPermission('Atļauta tikai aktīvas piegādes laikā');
+   const tracker=await Location.watchPositionAsync(
+    {accuracy:Location.Accuracy.Balanced,timeInterval:10000,distanceInterval:20},
+    point=>{
+     if(trackingIdRef.current!==order.id)return;
+     const {latitude,longitude,accuracy}=point.coords;
+     if(accuracy==null||accuracy>1000)return;
+     void api('/v1/courier/jobs/'+order.id+'/location',session.access_token,{
+      method:'POST',body:JSON.stringify({latitude,longitude,accuracyM:accuracy})
+     }).catch(()=>setError('Atrašanās vietu neizdevās nosūtīt. Pārbaudi interneta pieslēgumu.'));
+    }
+   );
+   if(trackingIdRef.current!==order.id)tracker.remove();
+   else trackingRef.current=tracker;
+  }catch(e){
+   trackingIdRef.current=null;trackingRef.current?.remove();trackingRef.current=null;
+   setTrackingId(null);setError(e instanceof Error?e.message:'Neizdevās ieslēgt GPS');
+  }
+ }
  useEffect(()=>{if(session?.access_token)void refresh(session.access_token);
  else{setAvailable([]);setMine([]);}
  },[session?.user.id]);
@@ -47,6 +91,7 @@ export default function CourierApp(){
   try{
    await api('/v1/courier/jobs/'+id+'/'+(kind==='claim'?'claim':'status'),
     session.access_token,{method:'POST',...(kind==='claim'?{}:{body:JSON.stringify({status:kind})})});
+   if(kind==='delivered' && trackingIdRef.current===id)await stopTracking(id);
    await refresh(session.access_token);
   }catch(e){setError(e instanceof Error?e.message:'Neizdevās mainīt statusu');setBusy(false);}
  }
@@ -77,18 +122,26 @@ export default function CourierApp(){
         <Text style={s.white}>Pieņemt piegādi</Text></Pressable>
      </View>)}
      <Text style={s.section}>Manas piegādes</Text>
+     <Text style={s.muted}>GPS kopīgošana ir brīvprātīga un darbojas tikai atvērtā lietotnē aktīvas piegādes laikā. {locationPermission}</Text>
      {!mine.length&&<Text style={s.muted}>Vēl nav pieņemtu piegāžu.</Text>}
      {mine.map(j=><View key={j.id} style={s.card}>
        <Text style={s.rowTitle}>#{j.id.slice(0,8)} · {j.status}</Text>
        <Text style={s.muted}>{j.address_line}, {j.postal_code}</Text>
        <Text style={s.money}>{euro(j.delivery_cents)}</Text>
+       {['ready_for_pickup','picked_up'].includes(j.status) && (
+        trackingId===j.id?<Pressable style={s.secondary} onPress={()=>void stopTracking(j.id)}>
+         <Text style={s.secondaryText}>Apturēt atrašanās vietas kopīgošanu</Text>
+        </Pressable>:<Pressable style={s.secondary} onPress={()=>void startTracking(j)}>
+         <Text style={s.secondaryText}>Atļaut GPS šai piegādei</Text>
+        </Pressable>
+       )}
        {j.status==='ready_for_pickup'&&<Pressable style={s.button} disabled={busy} onPress={()=>void change(j.id,'picked_up')}>
         <Text style={s.white}>Ēdiens saņemts</Text></Pressable>}
        {j.status==='picked_up'&&<Pressable style={s.button} disabled={busy} onPress={()=>void change(j.id,'delivered')}>
         <Text style={s.white}>Piegāde pabeigta</Text></Pressable>}
        {j.status==='delivered'&&<Text style={s.muted}>Atlīdzība uzskaitīta, izmaksai vajadzīga Stripe integrācija.</Text>}
      </View>)}
-     <Pressable style={s.secondary} onPress={()=>void supabase?.auth.signOut()}><Text style={s.secondaryText}>Iziet</Text></Pressable>
+     <Pressable style={s.secondary} onPress={()=>void (async()=>{if(trackingIdRef.current)await stopTracking(trackingIdRef.current);await supabase?.auth.signOut();})()}><Text style={s.secondaryText}>Iziet</Text></Pressable>
    </>}
    {!!error&&<Text style={s.error}>{error}</Text>}
   </ScrollView>
