@@ -7,6 +7,7 @@
 | Klienta katalogs/grozs | Servera dati, e-pasta autentifikācija, test-order uzmetums | UX QA, pieejamība, faktiski restorāni |
 | Restorānu vadība | Lomu pārbaudes, ēdienkarte, statusi, piegādes zonas | Restorāna datu verifikācija, līgums, statusu notifikācijas |
 | Kurjera darbība | Apstiprināta kurjera pieteikšanās, atomiska job claim un apmaksātu order piegādes stāvokļi | GPS kopīgošanas atļauja un pēdējā pozīcija izveidota, bet vēl vajag karti, servera dzēšanas grafiku, izsekošanu fonā tikai ar papildu piekrišanu, notifikācijas, atbalstu, KYC/līgumus |
+| Fiksētā BaitMe maksa | 0,50 € uzkrājums DB tikai pēc `delivered`, **Stripe iekasēšana nav ieviesta** | PVN, rēķini, priekšlaicīgas/daļējas atmaksas, dublikātu aizsardzība, negatīvu izmaksu novēršana |
 | Maksājumi | Reāla apmaksa izslēgta | Stripe Connect, SCA/3DS, verificēti webhook, idempotence, refund/chargeback, ledger un reconciliation |
 | Maksājumu apstrādes izmaksas | Klienta piemaksa 0; paredzēta restorāna apstrādes izmaksu segšana | Stripe bilanču transakciju fee precīza uzskaite un restorāna neto izmaksas, platformas risku kontrole |
 | Adreses/piegādes zonas | Pasta indeksa prefiksu sākotnējā pieeja | Reāla servera geokodēšana, zonas/attālumi, cenu pārbaude, kļūdainu adrešu apstrāde |
@@ -19,7 +20,7 @@
 
 ## Maksājumu arhitektūras drošība
 
-BaitMe biznesa modelis: platformas komisija 0%, abonementi 0€, restorāna ēdiena cena 100% restorānam un piegādes cena 100% kurjeram **par sekmīgi izpildītu piegādi**. **Jaunais apstiprinātais modelis:** restorāns sedz maksājumu apstrādes izmaksas, nevis klients. Tās jāatskaita no restorāna neto norēķina pēc Stripe faktiskā `balance_transaction.fee`, saglabājot kurjera pilnu piegādes atlīdzību un BaitMe 0% komisiju. Stripe Connect separate charges and transfers platformai var nozīmēt negatīvo atlikumu, strīdu un refund atbildību; šo modeli nedrīkst uzskatīt par bezmaksas/bezriska BaitMe. Gan klienta maksa, gan nodokļi jāizvērtē individuāli.
+BaitMe biznesa modelis: procentuālā komisija 0%, fiksētā maksa 0,50 € par apmaksātu/pabeigtu pasūtījumu, abonementi 0€, restorāna ēdiena cena pirms izmaksām restorānam un piegādes cena 100% kurjeram **par sekmīgi izpildītu piegādi**. **Jaunais apstiprinātais modelis:** restorāns sedz maksājumu apstrādes izmaksas, nevis klients. Tās jāatskaita no restorāna neto norēķina pēc Stripe faktiskā `balance_transaction.fee`, saglabājot kurjera pilnu piegādes atlīdzību. BaitMe no restorāna saņem 0,50 € fiksētu platformas maksu par pabeigtu pasūtījumu (pagājušajā posmā bija 0%). Stripe Connect separate charges and transfers platformai var nozīmēt negatīvo atlikumu, strīdu un refund atbildību; šo modeli nedrīkst uzskatīt par bezmaksas/bezriska BaitMe. Gan klienta maksa, gan nodokļi jāizvērtē individuāli.
 
 **NEDRĪKST**: atzīmēt \`payment_status='paid'\` pēc klienta paziņojuma, izsniegt pārtiku par neapmaksātu pasūtījumu, izdarīt kurjera pārskaitījumu pirms \`delivered\`, automātiski refundēt kurjera atlīdzību bez specifikācijas.
 

@@ -109,14 +109,14 @@ function DemoCustomerHome() {
                   <View style={styles.amountRow}><Text>Ēdiens</Text><Text>{formatEuro(breakdown.foodCents)}</Text></View>
                   <View style={styles.amountRow}><Text>Piegāde (kurjeram 100%)</Text><Text>{formatEuro(breakdown.deliveryCents)}</Text></View>
                   <View style={styles.amountRow}><Text>Klienta maksājumu apstrādes piemaksa</Text><Text>0,00 €</Text></View>
-                  <View style={styles.amountRow}><Text>BaitMe komisija</Text><Text>0,00 €</Text></View>
+                  <View style={styles.amountRow}><Text>BaitMe maksa klientam</Text><Text>0,00 €</Text></View>
                   <View style={[styles.amountRow, styles.totalRow]}>
                     <Text style={styles.totalText}>Kopā</Text>
                     <Text style={styles.totalText}>{formatEuro(breakdown.totalCents)}</Text>
                   </View>
                 </View>
                 <Text style={styles.info}>
-                  Restorāns sedz maksājumu apstrādes izmaksas no saviem ieņēmumiem, kad tās būs pārbaudītas Stripe Connect. Klients papildu kartes maksu nemaksā. Restorāna ēdiena daļa pirms apstrādes izmaksām: {formatEuro(breakdown.restaurantReceivesCents)}; kurjera piegādes daļa: {formatEuro(breakdown.courierReceivesCents)}. Reāli maksājumi vēl nav pieslēgti.
+                  Restorāns sedz maksājumu apstrādes izmaksas un 0,50 € BaitMe platformas maksu par sekmīgi pabeigtu pasūtījumu, kad tās būs pārbaudītas Stripe Connect. Klients papildu kartes maksu nemaksā. Restorāna ēdiena daļa pirms apstrādes izmaksām: {formatEuro(breakdown.restaurantReceivesCents)}; kurjera piegādes daļa: {formatEuro(breakdown.courierReceivesCents)}. Reāli maksājumi vēl nav pieslēgti.
                 </Text>
                 <View style={styles.disabledButton}>
                   <Text style={styles.disabledText}>Demo — apmaksa nav pieejama</Text>
@@ -178,7 +178,7 @@ function DemoCustomerHome() {
             <Text style={styles.overline}>PIEGĀDE UZ</Text>
             <Text style={styles.location}>📍 Latvija · izvēlies adresi vēlāk</Text>
             <Text style={styles.welcome}>Ko garšīgu šodien? 😋</Text>
-            <Text style={styles.muted}>Ēdiens tieši no restorāna. Bez platformas komisijas.</Text>
+            <Text style={styles.muted}>Ēdiens tieši no restorāna. Klientam BaitMe maksa 0 €.</Text>
             <TextInput
               accessibilityLabel="Meklēt restorānus"
               value={search}

@@ -193,11 +193,11 @@ export default function LiveHome(){
    {view==='home'&&<>
     <Text style={styles.eyebrow}>Piegāde Latvijā</Text>
     <Text style={styles.title}>Ko garšīgu šodien?</Text>
-    <Text style={styles.muted}>Ēdiens bez BaitMe komisijas, piegāde no restorāna.</Text>
+    <Text style={styles.muted}>Klientam BaitMe pakalpojuma maksa 0 €. Restorānam fiksēta 0,50 € maksa pēc veiksmīgas piegādes.</Text>
     <TextInput placeholder="Meklēt restorānus..." value={search} onChangeText={setSearch} style={styles.input}/>
     <View style={styles.banner}>
-     <Text style={styles.bannerTitle}>0% platformas komisija ✨</Text>
-     <Text style={styles.bannerText}>Restorāns sedz maksājumu apstrādes izmaksas. Kurjers saņem pilnu piegādes maksu.</Text>
+     <Text style={styles.bannerTitle}>Klientam 0 € BaitMe maksa ✨</Text>
+     <Text style={styles.bannerText}>Restorāns sedz maksājumu apstrādi + fiksētus 0,50 € par pabeigtu pasūtījumu. Kurjers saņem pilnu piegādi.</Text>
     </View>
     <Text style={styles.subtitle}>Restorāni</Text>
     {!visible.length&&<Text style={styles.muted}>Restorānu vēl nav. Biznesa panelī jāievada un jāpublicē restorāni.</Text>}
@@ -245,11 +245,11 @@ export default function LiveHome(){
     <View style={styles.bill}>
      <View style={styles.billRow}><Text>Ēdiens</Text><Text>{money(foodCents)}</Text></View>
      <View style={styles.billRow}><Text>Piegāde</Text><Text>{money(deliveryCents)}</Text></View>
-     <View style={styles.billRow}><Text>BaitMe komisija</Text><Text>0,00 €</Text></View>
+     <View style={styles.billRow}><Text>BaitMe maksa klientam</Text><Text>0,00 €</Text></View>
      <View style={styles.billRow}><Text>Maksājumu apstrādes piemaksa</Text><Text>0,00 €</Text></View>
      <View style={styles.billRow}><Text style={styles.cardTitle}>Kopā</Text><Text style={styles.cardTitle}>{money(totalCents)}</Text></View>
     </View>
-    <Text style={styles.muted}>Maksājumu apstrādes izmaksas sedz restorāns no ēdiena ieņēmumiem. Klientam nav papildu kartes piemaksas. Maksājumi vēl nav pieslēgti.</Text>
+    <Text style={styles.muted}>Maksājumu apstrādes izmaksas un 0,50 € BaitMe maksu par pabeigtu pasūtījumu sedz restorāns no ēdiena ieņēmumiem. Klientam nav papildu kartes piemaksas. Maksājumi vēl nav pieslēgti.</Text>
     <Button disabled={!count||busy||!selectedZone} onPress={()=>void makeDraft()}>Izveidot tikai testa pasūtījumu</Button>
     <Text style={styles.warning}>Tas nav īsts pasūtījums! Ēdiens netiks gatavots un kurjers netiks nosūtīts.</Text>
    </>}

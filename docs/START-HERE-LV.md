@@ -9,7 +9,7 @@
 - **API + DB:** Express 5, Supabase Auth validācija, servera lomu pārbaudes, Supabase/Postgres/RLS, atomiska cenas fiksēšana DB un piegādes uzdevuma piešķiršana.
 - **FigCraft:** rediģējams 3 ekrānu SVG un dizaina tokeni mapē \`design/\`.
 
-Visu reālo maksājumu, atmaksu un Stripe izmaksu funkcionalitāte vēl NAV pieslēgta.
+Visu reālo maksājumu, atmaksu un Stripe izmaksu funkcionalitāte vēl NAV pieslēgta. BaitMe 0,50 € maksa restorānam pēc pabeigtas piegādes šobrīd ir tikai pārbaudāma datubāzes uzskaite.
 
 ## 2. Kas vajadzīgs
 
@@ -35,11 +35,14 @@ npm run typecheck
 ## 4. Izveidot Supabase
 
 - https://supabase.com/dashboard -> New project (izveido īpaši `baitme-staging`, nevis produkcijas projektu)
-- Project URL un public anon key ir paredzētas klienta lietotnēm.
-- Service role key dod pilnu DB piekļuvi, tāpēc to glabāt **tikai servera vidē** un NEKAD neievietot \`EXPO_PUBLIC_*\`, \`NEXT_PUBLIC_*\`, GitHub vai mobilajā lietotnē.
+- Project URL un publishable key ir paredzētas klienta lietotnēm.
+- Servera secret key dod augsta līmeņa DB piekļuvi, tāpēc to glabāt **tikai servera vidē** un NEKAD neievietot \`EXPO_PUBLIC_*\`, \`NEXT_PUBLIC_*\`, GitHub vai mobilajā lietotnē.
 - SQL Editor: palaist secīgi:
   1. \`supabase/migrations/202610180001_baitme_init.sql\`
-  2. \`supabase/migrations/202610180002_security_lockdown.sql\`
+  2. `supabase/migrations/202610180002_security_lockdown.sql`
+  3. `supabase/migrations/202610180003_applications.sql`
+  4. `supabase/migrations/202610180004_complaints_tracking.sql`
+  5. `supabase/migrations/202610180005_fixed_restaurant_fee.sql`
 - Ieslēgt e-pasta autentifikāciju, pārbaudīt Supabase sūtīto reģistrācijas e-pastu un HTTPS URL.
 - Darbinieku/kurjeru kontus sākotnēji izveidot caur Supabase Auth (apstiprināšana manuāla).
 
@@ -55,7 +58,7 @@ cp apps/courier/.env.example apps/courier/.env.local
 cp apps/business-web/.env.example apps/business-web/.env.local
 \`\`\`
 
-Aizstāj \`YOUR-PROJECT\`, publisko anon atslēgu un servera service-role atslēgu ar savām Supabase vērtībām. 
+Aizstāj \`YOUR-PROJECT\`, publisko publishable atslēgu un servera secret atslēgu ar savām Supabase vērtībām. 
 Mobilajām lietotnēm \`EXPO_PUBLIC_API_URL\` jābūt sasniedzamam no telefona, piem., \`http://192.168.1.100:8787\` (nevis \`localhost\` uz telefona).
 Uz servera \`ALLOWED_ORIGINS\` pievieno sava web paneļa vietni, piem., \`https://business.baitme.lv\`.
 
@@ -142,7 +145,11 @@ values ('USER_UUID'::uuid,'Kurjers A',true);
 Skati [Stripe, komisiju un atmaksu drošas integrācijas dokumentu](PAYMENTS-AND-REFUNDS.md).
 Stripe API atslēgas konfigurē tikai slepenajā hostinga vidē; **NEKAD** nestūri tās mobilajās aplikācijās, GitHub vai publiskos NEXT_PUBLIC / EXPO_PUBLIC mainīgajos.
 
-## 12. Kas jāizdara pirms klientu palaišanas
+## 12. BaitMe maksas noteikums
+
+Restorāns sedz Stripe faktisko apstrādes maksu un BaitMe **0,50 €** par apmaksātu un pabeigtu piegādi. Klients maksā tikai par ēdienu un piegādi; kurjers saņem piegādes atlīdzību pilnā apmērā. BaitMe maksa ir uzkrājums `platform_fee_ledger`; tā **nav iekasēta** un Stripe vēl nav pieslēgts. Pārbaudi `docs/PAYMENTS-AND-REFUNDS.md` un 5. migrāciju.
+
+## 13. Kas jāizdara pirms klientu palaišanas
 
 Skati \`docs/PRODUCTION-GATES.md\`. Pat pēc Supabase pieslēgšanas aplikāciju vēl nedrīkst izmantot naudas iekasēšanai.
 

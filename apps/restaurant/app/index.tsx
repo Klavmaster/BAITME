@@ -98,7 +98,7 @@ export default function RestaurantApp(){
        <Text style={s.note}>{o.address_line}, {o.postal_code}</Text>
        <Text style={s.note}>Statuss: {o.status} · Maksājums: {o.payment_status}</Text>
        {o.order_items?.map((i,idx)=><Text key={idx} style={s.item}>{i.quantity} × {i.name}</Text>)}
-       <Text style={s.earnings}>Restorānam: {euro(o.food_cents)}</Text>
+       <Text style={s.earnings}>Ēdiens pirms Stripe maksas un BaitMe 0,50 € (tikai pēc piegādes): {euro(o.food_cents)}</Text>
        {o.payment_status==='paid'&&actions[o.status]&&<Pressable
         onPress={()=>void transition(o,actions[o.status])} style={s.button} disabled={busy}>
          <Text style={s.buttonText}>{labels[actions[o.status]]}</Text></Pressable>}
