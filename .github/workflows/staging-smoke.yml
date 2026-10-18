@@ -1,0 +1,28 @@
+name: BaitMe staging smoke
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: baitme-staging-smoke
+  cancel-in-progress: true
+
+jobs:
+  check-staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm deployed HTTPS API can access Supabase securely
+        env:
+          STAGING_SMOKE_RETRIES: 38
+          STAGING_SMOKE_DELAY_MS: 6000
+        run: node scripts/smoke-staging.mjs

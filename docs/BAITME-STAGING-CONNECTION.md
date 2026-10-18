@@ -54,3 +54,9 @@ Restorāna Expo: `npm run restaurant`; kurjera Expo: `npm run courier`. Biznesa 
 ## Pirms īstiem klientiem
 
 Stripe Connect testu maksājumi, maksājumu webhook ar idempotenci, daļējas atmaksas un naudas sadale, REST API rate-limiting, datu aizsardzība, adrešu validācija, kurjeru atļauju pārbaudes, monitorings, juridiskie dokumenti un veikala publicēšana vēl ir jāizdara.
+
+## Neatkarīga pārbaude no GitHub Actions
+
+Pēc katras izmaiņas `main` zarā atsevišķa darbplūsma [BaitMe staging smoke](https://github.com/Klavmaster/BAITME/actions/workflows/staging-smoke.yml) pārbauda abus publiskos HTTPS serverus. Tā izsauc `/health`, `/ready`, restorānu katalogu, atteikumu anonīmam `/v1/me`, un biznesa paneļa sākumlapu. `/ready` pierāda reālu servera Supabase piekļuvi; bez slepenās atslēgas tests nevar iziet. Tā neizveido pasūtījumus, lietotājus vai maksājumus.
+
+Darbplūsmu var manuāli palaist arī GitHub Actions sadaļā. Staging pieejamības kļūda neietekmē CI lokālo PostgreSQL integrācijas testu rezultātus.
