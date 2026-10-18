@@ -84,6 +84,103 @@ app.get("/v1/orders/mine",requireUser,wrap(async(req,res)=>{
   if(error)return controlledError(res,error);
   res.json({orders:data});
 }));
+app.get("/v1/restaurant/mine",requireUser,wrap(async(req,res)=>{
+  const {data:staff,error}=await db().from("restaurant_staff")
+    .select("restaurant_id,role").eq("user_id",req.user.id).limit(100);
+  if(error)return controlledError(res,error);
+  if(!staff.length)return res.json({restaurants:[]});
+  const {data,error:err}=await db().from("restaurants")
+    .select("id,name,published,slug").in("id",staff.map(x=>x.restaurant_id)).limit(100);
+  if(err)return controlledError(res,err);
+  res.json({restaurants:data.map(x=>({...x,role:staff.find(s=>s.restaurant_id===x.id)?.role}))});
+}));
+app.get("/v1/restaurant/:restaurantId/menu",requireUser,wrap(async(req,res)=>{
+  const id=req.params.restaurantId;
+  if(!uuid(id))return fail(res,400,"Nederīgs ID");
+  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  const {data,error}=await db().from("menu_items")
+   .select("id,name,description,category,price_cents,image_url,available,sort_order")
+   .eq("restaurant_id",id).order("sort_order").limit(200);
+  if(error)return controlledError(res,error);
+  res.json({items:data});
+}));
+app.post("/v1/restaurant/:restaurantId/menu",requireUser,wrap(async(req,res)=>{
+  const id=req.params.restaurantId;
+  const {name,description,category,priceCents}=req.body||{};
+  if(!uuid(id)||typeof name!=="string"||name.trim().length<2||name.length>100||
+      typeof description!=="string"||description.length>500||
+      typeof category!=="string"||category.length>80||
+      !Number.isSafeInteger(priceCents)||priceCents<0||priceCents>1000000)
+    return fail(res,400,"Nederīgi ēdiena dati");
+  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  const {data,error}=await db().from("menu_items").insert({
+    restaurant_id:id,name:name.trim(),description,category,price_cents:priceCents,
+    available:true
+  }).select("id").single();
+  if(error)return controlledError(res,error);
+  res.status(201).json({id:data.id});
+}));
+app.patch("/v1/restaurant/:restaurantId/menu/:itemId",requireUser,wrap(async(req,res)=>{
+  const {restaurantId,itemId}=req.params;
+  if(!uuid(restaurantId)||!uuid(itemId))return fail(res,400,"Nederīgs ID");
+  if(!await hasRestaurantRole(req.user.id,restaurantId))return fail(res,403,"Nav piekļuves");
+  const allowed=new Set(["name","description","category","price_cents","available"]);
+  const patch={};
+  for(const [key,value] of Object.entries(req.body||{})){
+    if(!allowed.has(key))return fail(res,400,"Neatļauts lauks");
+    if(key==="name" && (typeof value!=="string"||value.trim().length<2||value.length>100)) return fail(res,400,"Nederīgs nosaukums");
+    if(key==="description" && (typeof value!=="string"||value.length>500)) return fail(res,400,"Nederīgs apraksts");
+    if(key==="category" && (typeof value!=="string"||value.length>80))return fail(res,400,"Nederīga kategorija");
+    if(key==="price_cents" && (!Number.isSafeInteger(value)||value<0||value>1000000))return fail(res,400,"Nederīga cena");
+    if(key==="available" && typeof value!=="boolean") return fail(res,400,"Nederīga pieejamība");
+    patch[key]=typeof value==="string"?value.trim():value;
+  }
+  if(!Object.keys(patch).length)return fail(res,400,"Nav izmaiņu");
+  const {data,error}=await db().from("menu_items").update(patch)
+    .eq("id",itemId).eq("restaurant_id",restaurantId).select("id").maybeSingle();
+  if(error)return controlledError(res,error);
+  if(!data)return fail(res,404,"Ēdiens nav atrasts");
+  res.json({id:data.id});
+}));
+app.get("/v1/restaurant/:restaurantId/zones",requireUser,wrap(async(req,res)=>{
+  const id=req.params.restaurantId;
+  if(!uuid(id))return fail(res,400,"Nederīgs ID");
+  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  const {data,error}=await db().from("delivery_zones")
+    .select("id,name,postal_code_prefix,delivery_cents,active")
+    .eq("restaurant_id",id).order("name").limit(100);
+  if(error)return controlledError(res,error);
+  res.json({zones:data});
+}));
+app.post("/v1/restaurant/:restaurantId/zones",requireUser,wrap(async(req,res)=>{
+  const id=req.params.restaurantId;
+  const {name,postalCodePrefix,deliveryCents}=req.body||{};
+  if(!uuid(id)||typeof name!=="string"||name.trim().length<2||name.length>80||
+      typeof postalCodePrefix!=="string"||!/^LV-[0-9]{1,4}$/.test(postalCodePrefix)||
+      !Number.isSafeInteger(deliveryCents)||deliveryCents<0||deliveryCents>100000)
+    return fail(res,400,"Nederīgi zonas dati");
+  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  const {data,error}=await db().from("delivery_zones").insert({
+    restaurant_id:id,name:name.trim(),postal_code_prefix:postalCodePrefix,
+    delivery_cents:deliveryCents,active:true
+  }).select("id").single();
+  if(error)return controlledError(res,error);
+  res.status(201).json({id:data.id});
+}));
+app.get("/v1/restaurant/:restaurantId/summary",requireUser,wrap(async(req,res)=>{
+  const id=req.params.restaurantId;
+  if(!uuid(id))return fail(res,400,"Nederīgs ID");
+  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  const {data,error}=await db().from("orders")
+    .select("status,payment_status,food_cents,delivery_cents,total_cents")
+    .eq("restaurant_id",id).limit(2000);
+  if(error)return controlledError(res,error);
+  const paid=data.filter(x=>x.payment_status==="paid"||x.payment_status==="partially_refunded");
+  res.json({summary:{
+    totalOrders:data.length,paidOrders:paid.length,foodCents:paid.reduce((a,x)=>a+x.food_cents,0),
+    pendingOrders:data.filter(x=>["placed","accepted","preparing","ready_for_pickup"].includes(x.status)).length
+  }});
+}));
 app.get("/v1/restaurant/:restaurantId/orders",requireUser,wrap(async(req,res)=>{
   const id=req.params.restaurantId;
   if(!uuid(id))return fail(res,400,"Nederīgs ID");
