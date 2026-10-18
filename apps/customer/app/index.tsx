@@ -5,10 +5,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { restaurants, Restaurant, MenuItem } from '../src/data/demo';
-import { calculateBreakdown, formatEuro } from '../src/lib/pricing';
+import { calculateBreakdown, estimateProcessingFeeCents, formatEuro } from '../src/lib/pricing';
 
-const PURPLE = '#6547EC';
-const INK = '#1E1C2A';
+const PURPLE = '#6B4FEF';
+const INK = '#1E1B2E';
 const categories = ['Visi', 'Burgeri', 'Pica', 'Āzijas'];
 
 function SmallTag({ children }: { children: string }) {
@@ -38,7 +38,11 @@ export default function CustomerHome() {
   const lines = cartRestaurant?.menu
     .filter((item) => (quantities[item.id] || 0) > 0)
     .map((item) => ({ unitPriceCents: item.priceCents, quantity: quantities[item.id] })) || [];
-  const breakdown = calculateBreakdown(lines, count > 0 ? (cartRestaurant?.deliveryCents || 0) : 0);
+  const baseBreakdown = calculateBreakdown(lines, count > 0 ? (cartRestaurant?.deliveryCents || 0) : 0);
+  // DEMO simulation only. Live card-processing surcharges are legally restricted
+  // in Latvia/EEA; keep payment disabled until compliance and Stripe review.
+  const processingFeePreviewCents = estimateProcessingFeeCents(baseBreakdown.totalCents);
+  const breakdown = calculateBreakdown(lines, baseBreakdown.deliveryCents, processingFeePreviewCents);
 
   const filtered = useMemo(() => restaurants.filter((r) =>
     (category === 'Visi' || r.category === category) &&
@@ -79,7 +83,7 @@ export default function CustomerHome() {
           </View>
           <ScrollView contentContainerStyle={styles.scrollBody}>
             <Text style={styles.overline}>DEMONSTRĀCIJAS REŽĪMS</Text>
-            <Text style={styles.pageTitle}>Grozs 🛍️</Text>
+            <Text style={styles.pageTitle}>Tavs pasūtījums 🛍️</Text>
             {count === 0 || !cartRestaurant ? (
               <Text style={styles.muted}>Grozs ir tukšs. Izvēlies restorānu un pievieno ēdienu!</Text>
             ) : (
@@ -103,17 +107,18 @@ export default function CustomerHome() {
                 <View style={styles.summary}>
                   <View style={styles.amountRow}><Text>Ēdiens</Text><Text>{formatEuro(breakdown.foodCents)}</Text></View>
                   <View style={styles.amountRow}><Text>Piegāde (kurjeram 100%)</Text><Text>{formatEuro(breakdown.deliveryCents)}</Text></View>
-                  <View style={styles.amountRow}><Text>BaitMe servisa maksa</Text><Text>0,00 €</Text></View>
+                  <View style={styles.amountRow}><Text>Apstrādes izmaksu piemērs*</Text><Text>{formatEuro(breakdown.processingFeeCents)}</Text></View>
+                  <View style={styles.amountRow}><Text>BaitMe komisija</Text><Text>0,00 €</Text></View>
                   <View style={[styles.amountRow, styles.totalRow]}>
                     <Text style={styles.totalText}>Kopā</Text>
                     <Text style={styles.totalText}>{formatEuro(breakdown.totalCents)}</Text>
                   </View>
                 </View>
                 <Text style={styles.info}>
-                  Restorāns saņem {formatEuro(breakdown.restaurantReceivesCents)}, kurjers par pabeigtu piegādi saņem {formatEuro(breakdown.courierReceivesCents)}. Maksājumi nav pieslēgti.
+                  *Tikai simulācija ar standarta EEZ kartes likmes piemēru (1,5% + 0,25 €). Latvijā papildu maksa par parastu kartes izmantošanu ir aizliegta. Reāli maksājumi ir atspējoti, un šī summa netiek iekasēta. Restorāna ēdiena daļa: {formatEuro(breakdown.restaurantReceivesCents)}; kurjera piegādes daļa: {formatEuro(breakdown.courierReceivesCents)}.
                 </Text>
                 <View style={styles.disabledButton}>
-                  <Text style={styles.disabledText}>Apmaksa vēl nav pieejama</Text>
+                  <Text style={styles.disabledText}>Demo — apmaksa nav pieejama</Text>
                 </View>
                 <RoundedButton title="Iztukšot grozu" subtle onPress={() => {
                   setQuantities({});
@@ -172,7 +177,7 @@ export default function CustomerHome() {
             <Text style={styles.overline}>PIEGĀDE UZ</Text>
             <Text style={styles.location}>📍 Latvija · izvēlies adresi vēlāk</Text>
             <Text style={styles.welcome}>Ko garšīgu šodien? 😋</Text>
-            <Text style={styles.muted}>Restorānu cenas bez BaitMe uzcenojuma</Text>
+            <Text style={styles.muted}>Ēdiens tieši no restorāna. Bez platformas komisijas.</Text>
             <TextInput
               accessibilityLabel="Meklēt restorānus"
               value={search}
@@ -192,10 +197,10 @@ export default function CustomerHome() {
               ))}
             </ScrollView>
             <View style={styles.valueBanner}>
-              <Text style={styles.bannerTitle}>0% BaitMe komisija 🎉</Text>
-              <Text style={styles.bannerText}>Maksā par ēdienu un piegādi. Bez servisa maksas.</Text>
+              <Text style={styles.bannerTitle}>0% BaitMe komisija ✨</Text>
+              <Text style={styles.bannerText}>Restorānam pilna ēdiena cena, kurjeram pilna piegādes cena. Apstrādes izmaksas redzi groza piemērā.</Text>
             </View>
-            <Text style={styles.sectionTitle}>Restorāni tev</Text>
+            <Text style={styles.sectionTitle}>Garšīgākā izvēle tev</Text>
             <Text style={styles.demoNote}>Šobrīd redzami tikai paraugdati.</Text>
             {filtered.length === 0 && <Text style={styles.muted}>Nekas netika atrasts.</Text>}
             {filtered.map((r) => (
@@ -232,26 +237,26 @@ export default function CustomerHome() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#F8F8FC' },
   scrollBody: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 130 },
-  homeHeader: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18 },
+  homeHeader: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 18, paddingBottom: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24 },
   brand: { color: INK, fontSize: 31, fontWeight: '900', letterSpacing: -1.8, marginBottom: 19 },
   brandAccent: { color: PURPLE },
   overline: { color: PURPLE, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 5 },
   location: { fontSize: 14, fontWeight: '700', color: INK, marginBottom: 22 },
   welcome: { fontSize: 25, fontWeight: '900', color: INK, marginBottom: 5 },
   muted: { color: '#777482', fontSize: 13, lineHeight: 19 },
-  search: { backgroundColor: '#F2F1F7', borderRadius: 16, marginTop: 20, paddingHorizontal: 15, height: 50, fontSize: 14, color: INK },
+  search: { backgroundColor: '#F4F3F8', borderRadius: 16, marginTop: 20, paddingHorizontal: 17, height: 54, fontSize: 14, color: INK },
   filters: { marginBottom: 17, marginTop: 2 },
   chip: { paddingHorizontal: 19, paddingVertical: 11, marginRight: 9, borderRadius: 30, backgroundColor: '#ECEBF2' },
   chipActive: { backgroundColor: PURPLE },
   chipText: { color: INK, fontSize: 13, fontWeight: '700' },
   chipTextActive: { color: '#FFFFFF' },
-  valueBanner: { backgroundColor: '#EDE9FF', borderRadius: 18, padding: 19, marginBottom: 23 },
-  bannerTitle: { color: '#4630B2', fontSize: 17, fontWeight: '900', marginBottom: 5 },
-  bannerText: { color: '#5E548A', fontSize: 13 },
+  valueBanner: { backgroundColor: '#E7F9BC', borderRadius: 22, padding: 21, marginBottom: 23, borderWidth: 1, borderColor: '#D3EA98' },
+  bannerTitle: { color: '#26341C', fontSize: 19, fontWeight: '900', marginBottom: 6 },
+  bannerText: { color: '#485A32', fontSize: 13, lineHeight: 19 },
   sectionTitle: { color: INK, fontSize: 20, fontWeight: '900', marginTop: 6, marginBottom: 12 },
   demoNote: { color: '#94919D', fontSize: 11, marginBottom: 10 },
-  restaurantCard: { backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: '#ECEBF0' },
-  restaurantArt: { height: 105, alignItems: 'center', justifyContent: 'center' },
+  restaurantCard: { backgroundColor: 'white', borderRadius: 22, overflow: 'hidden', marginBottom: 17, borderWidth: 1, borderColor: '#ECEBF0' },
+  restaurantArt: { height: 132, alignItems: 'center', justifyContent: 'center' },
   restaurantEmoji: { fontSize: 55 },
   restaurantDetails: { padding: 15, gap: 5 },
   restaurantTitle: { color: INK, fontSize: 18, fontWeight: '800' },
