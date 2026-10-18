@@ -29,3 +29,36 @@ jobs:
         run: npm run typecheck
       - name: Build web dashboard
         run: npm run build:business
+
+  database-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: baitme_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d baitme_ci"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: baitme_ci
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PostgreSQL client
+        run: command -v psql || (sudo apt-get update -qq && sudo apt-get install -y postgresql-client)
+      - name: Create simulated Supabase roles for CI
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/ci-bootstrap.sql
+      - name: Run first schema migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180001_baitme_init.sql
+      - name: Run security migration
+        run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180002_security_lockdown.sql
+      - name: End-to-end domain/authorization/ledger assertions
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/order-lifecycle.sql
