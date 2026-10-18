@@ -237,7 +237,17 @@ export default function Page(){
       !Number.isSafeInteger(minDistanceM)||!Number.isSafeInteger(maxDistanceM)||
       minDistanceM<0||maxDistanceM<=minDistanceM)
      throw new Error("Norādi derīgu piegādes cenu un intervālu kilometros");
-   await api("/v1/restaurant/" return <div className="biz-app">
+   await api("/v1/restaurant/"+rid+"/zones",{method:"POST",body:JSON.stringify({
+    name:zoneName,minDistanceM,maxDistanceM,deliveryCents:cents
+   })});
+   setZoneName("");setZoneMinKm(zoneMaxKm);setZoneMaxKm(String(maxKm+3));
+   await loadRestaurant(rid);
+  });
+ }
+ if(!configured)return <main><h1>BaitMe biznesa panelis</h1>
+  <p className="notice">Trūkst publiskās Supabase/API konfigurācijas.</p></main>;
+ if(!ready)return <main><h1>BaitMe Business</h1><p>Ielādē...</p></main>;
+ return <div className="biz-app">
  {!session?<main className="biz-auth-page">
   <section className="biz-auth-card">
    <div className="biz-auth-brand">bait<span>me.</span><small> BUSINESS</small></div>
@@ -553,6 +563,11 @@ export default function Page(){
          <button className="toggle" disabled={busy}
           onClick={()=>void updateZone(z.id,{active:!z.active})}>{z.active?"Izslēgt":"Ieslēgt"}</button>
         </>}
+       </div>
+      </div>)}
+      <p className="notice">Piegādes zonas ir saglabātas katram restorānam atsevišķi. Klienta adreses ģeokodēšana vēl nav ieviesta, tādēļ jaunās attāluma zonas nav pasūtāmas. Maksājumi joprojām ir izslēgti.</p>
+     </section>}
+    </>}
    </main>
   </div>
   <VenueSwitcher open={venueDialog} onClose={()=>setVenueDialog(false)} venues={restaurants}
