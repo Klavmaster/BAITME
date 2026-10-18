@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "BaitMe Kurjers",
+    "slug": "baitme-courier",
+    "scheme": "baitme-courier",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}

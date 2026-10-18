@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "BaitMe Restorāns",
+    "slug": "baitme-restaurant",
+    "scheme": "baitme-restaurant",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "platforms": [
+      "ios",
+      "android",
+      "web"
+    ]
+  }
+}
