@@ -1,0 +1,10 @@
+{
+  "name": "@baitme/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./money": "./src/money.mjs",
+    "./status": "./src/status.mjs"
+  }
+}
