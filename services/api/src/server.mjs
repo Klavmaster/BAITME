@@ -84,6 +84,72 @@ app.get("/v1/orders/mine",requireUser,wrap(async(req,res)=>{
   if(error)return controlledError(res,error);
   res.json({orders:data});
 }));
+async function requirePlatformAdmin(req,res,next){
+ try{
+  const {data,error}=await db().from("platform_admins").select("user_id").eq("user_id",req.user.id).maybeSingle();
+  if(error)return controlledError(res,error);
+  if(!data)return fail(res,403,"Nav platformas administratora piekļuves");
+  next();
+ }catch(e){next(e);}
+}
+app.post("/v1/apply/restaurant",requireUser,wrap(async(req,res)=>{
+ const {name,slug,category,description}=req.body||{};
+ if(typeof name!=="string"||name.trim().length<2||name.length>120||
+    typeof slug!=="string"||!(/^[a-z0-9-]{3,60}$/).test(slug)||
+    typeof category!=="string"||category.length>80||
+    typeof description!=="string"||description.length>500)
+   return fail(res,400,"Nederīgs restorāna pieteikums");
+ const {data,error}=await db().from("restaurant_applications").insert({
+  applicant_id:req.user.id,name:name.trim(),slug,category,description
+ }).select("id").single();
+ if(error?.code==="23505")return fail(res,409,"Šāds pieteikums jau iesniegts");
+ if(error)return controlledError(res,error);
+ res.status(201).json({applicationId:data.id,status:"pending"});
+}));
+app.post("/v1/apply/courier",requireUser,wrap(async(req,res)=>{
+ const {displayName}=req.body||{};
+ if(typeof displayName!=="string"||displayName.trim().length<2||displayName.length>120)
+  return fail(res,400,"Nederīgs kurjera pieteikums");
+ const {data,error}=await db().from("courier_applications").insert({
+  applicant_id:req.user.id,display_name:displayName.trim()
+ }).select("id").single();
+ if(error?.code==="23505")return fail(res,409,"Pieteikums jau iesniegts");
+ if(error)return controlledError(res,error);
+ res.status(201).json({applicationId:data.id,status:"pending"});
+}));
+app.get("/v1/apply/mine",requireUser,wrap(async(req,res)=>{
+ const [r,c]=await Promise.all([
+   db().from("restaurant_applications").select("id,name,slug,status,created_at")
+    .eq("applicant_id",req.user.id).order("created_at",{ascending:false}).limit(25),
+   db().from("courier_applications").select("id,display_name,status,created_at")
+    .eq("applicant_id",req.user.id).order("created_at",{ascending:false}).limit(25)
+ ]);
+ if(r.error||c.error)return controlledError(res,r.error||c.error);
+ res.json({restaurants:r.data,couriers:c.data});
+}));
+app.get("/v1/admin/applications",requireUser,requirePlatformAdmin,wrap(async(req,res)=>{
+ const [r,c]=await Promise.all([
+  db().from("restaurant_applications")
+    .select("id,applicant_id,name,slug,category,description,status,created_at")
+    .eq("status","pending").order("created_at").limit(100),
+  db().from("courier_applications")
+    .select("id,applicant_id,display_name,status,created_at")
+    .eq("status","pending").order("created_at").limit(100)
+ ]);
+ if(r.error||c.error)return controlledError(res,r.error||c.error);
+ res.json({restaurants:r.data,couriers:c.data});
+}));
+app.post("/v1/admin/applications/:kind/:id/approve",requireUser,requirePlatformAdmin,wrap(async(req,res)=>{
+ if(!uuid(req.params.id)||!["restaurant","courier"].includes(req.params.kind))
+  return fail(res,400,"Nederīgs pieteikums");
+ const procedure=req.params.kind==="restaurant"?"approve_baitme_restaurant":"approve_baitme_courier";
+ const {data,error}=await db().rpc(procedure,{
+   p_admin:req.user.id,p_application:req.params.id
+ });
+ if(error)return controlledError(res,error);
+ res.json({id:data,approved:true,active:false,
+  message:"Pieteikums apstiprināts; pilnai darbībai vēl vajadzīgas identitātes un maksājumu pārbaudes."});
+}));
 app.get("/v1/restaurant/mine",requireUser,wrap(async(req,res)=>{
   const {data:staff,error}=await db().from("restaurant_staff")
     .select("restaurant_id,role").eq("user_id",req.user.id).limit(100);
