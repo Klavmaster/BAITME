@@ -18,7 +18,7 @@ const V='#694EEB',INK='#242032';
 const apiUrl=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
 const supabase=createClient(
  process.env.EXPO_PUBLIC_SUPABASE_URL||'https://invalid.supabase.co',
- process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY||'not-configured',
+ process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY||'not-configured',
  {auth:{
   storage:{
    getItem:(key)=>SecureStore.getItemAsync(key),

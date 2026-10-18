@@ -299,6 +299,6 @@ const styles = StyleSheet.create({
 });
 
 export default function CustomerHome(){
-  return process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_SUPABASE_URL && process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+  return process.env.EXPO_PUBLIC_API_URL && process.env.EXPO_PUBLIC_SUPABASE_URL && (process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY)
     ? <LiveHome/> : <DemoCustomerHome/>;
 }

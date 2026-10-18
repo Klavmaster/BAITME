@@ -11,7 +11,7 @@ type Complaint={id:string;order_id:string;category:string;customer_description:s
  restaurant_recommended_cents:number|null;review_note:string|null;approved_refund_cents:number|null;created_at:string};
 const API=process.env.NEXT_PUBLIC_API_URL||"";
 const URL=process.env.NEXT_PUBLIC_SUPABASE_URL||"";
-const KEY=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
+const KEY=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
 const configured=!!(API&&URL&&KEY);
 const money=(c:number)=>(c/100).toFixed(2).replace(".",",")+" €";
 const flow:Record<string,string>={placed:"accepted",accepted:"preparing",preparing:"ready_for_pickup"};

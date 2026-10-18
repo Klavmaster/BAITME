@@ -8,7 +8,7 @@ type Complaint={id:string;order_id:string;restaurant_id:string;category:string;c
  approved_refund_cents:number|null;created_at:string};
 const money=(c:number)=>(c/100).toFixed(2).replace(".",",")+" €";
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"";
-const anon=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
+const anon=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
 const apiUrl=(process.env.NEXT_PUBLIC_API_URL||"").replace(/\/$/,"");
 export default function Admin(){
  const [supabase]=useState(()=>url&&anon?createClient(url,anon):null);

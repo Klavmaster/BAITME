@@ -3,9 +3,9 @@ import * as SecureStore from 'expo-secure-store';
 import {createClient, type SupabaseClient} from '@supabase/supabase-js';
 
 const url=process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const anonKey=process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+const publishableKey=process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
 export const apiUrl=(process.env.EXPO_PUBLIC_API_URL || '').replace(/\/$/, '');
-export const configured=Boolean(url&&anonKey&&apiUrl);
+export const configured=Boolean(url&&publishableKey&&apiUrl);
 
 const storage={
   getItem: (key:string)=>SecureStore.getItemAsync(key),
@@ -14,7 +14,7 @@ const storage={
 };
 
 export const supabase:SupabaseClient|null=configured
- ?createClient(url,anonKey,{
+ ?createClient(url,publishableKey,{
     auth:{storage,autoRefreshToken:true,persistSession:true,detectSessionInUrl:false}
   }):null;
 

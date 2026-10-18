@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 import {createClient,type Session} from "@supabase/supabase-js";
 const url=process.env.NEXT_PUBLIC_SUPABASE_URL||"";
-const anon=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
+const anon=process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY||process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||"";
 const apiUrl=(process.env.NEXT_PUBLIC_API_URL||"").replace(/\/$/,"");
 export default function Apply(){
  const [supabase]=useState(()=>url&&anon?createClient(url,anon):null);

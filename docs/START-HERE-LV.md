@@ -34,7 +34,7 @@ npm run typecheck
 
 ## 4. Izveidot Supabase
 
-- https://supabase.com/dashboard -> New project
+- https://supabase.com/dashboard -> New project (izveido īpaši `baitme-staging`, nevis produkcijas projektu)
 - Project URL un public anon key ir paredzētas klienta lietotnēm.
 - Service role key dod pilnu DB piekļuvi, tāpēc to glabāt **tikai servera vidē** un NEKAD neievietot \`EXPO_PUBLIC_*\`, \`NEXT_PUBLIC_*\`, GitHub vai mobilajā lietotnē.
 - SQL Editor: palaist secīgi:
