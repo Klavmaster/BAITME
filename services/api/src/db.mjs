@@ -19,11 +19,11 @@ export async function authenticate(token) {
   const {data,error}=await authClient.auth.getUser(token);
   return error?null:(data.user||null);
 }
-export async function hasRestaurantRole(userId,restaurantId) {
+export async function hasRestaurantRole(userId,restaurantId,allowedRoles=null) {
   const {data,error}=await db().from("restaurant_staff")
-    .select("restaurant_id").eq("user_id",userId).eq("restaurant_id",restaurantId).limit(1);
+    .select("restaurant_id,role").eq("user_id",userId).eq("restaurant_id",restaurantId).limit(1);
   if (error) throw error;
-  return data.length>0;
+  return data.length>0 && (!allowedRoles || allowedRoles.includes(data[0].role));
 }
 export async function hasCourierRole(userId) {
   const {data,error}=await db().from("courier_profiles")

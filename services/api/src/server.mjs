@@ -178,7 +178,7 @@ app.post("/v1/restaurant/:restaurantId/menu",requireUser,wrap(async(req,res)=>{
       typeof category!=="string"||category.length>80||
       !Number.isSafeInteger(priceCents)||priceCents<0||priceCents>1000000)
     return fail(res,400,"Nederīgi ēdiena dati");
-  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  if(!await hasRestaurantRole(req.user.id,id,['owner','manager']))return fail(res,403,"Nav piekļuves");
   const {data,error}=await db().from("menu_items").insert({
     restaurant_id:id,name:name.trim(),description,category,price_cents:priceCents,
     available:true
@@ -189,7 +189,7 @@ app.post("/v1/restaurant/:restaurantId/menu",requireUser,wrap(async(req,res)=>{
 app.patch("/v1/restaurant/:restaurantId/menu/:itemId",requireUser,wrap(async(req,res)=>{
   const {restaurantId,itemId}=req.params;
   if(!uuid(restaurantId)||!uuid(itemId))return fail(res,400,"Nederīgs ID");
-  if(!await hasRestaurantRole(req.user.id,restaurantId))return fail(res,403,"Nav piekļuves");
+  if(!await hasRestaurantRole(req.user.id,restaurantId,['owner','manager']))return fail(res,403,"Nav piekļuves");
   const allowed=new Set(["name","description","category","price_cents","available"]);
   const patch={};
   for(const [key,value] of Object.entries(req.body||{})){
@@ -225,7 +225,7 @@ app.post("/v1/restaurant/:restaurantId/zones",requireUser,wrap(async(req,res)=>{
       typeof postalCodePrefix!=="string"||!/^LV-[0-9]{1,4}$/.test(postalCodePrefix)||
       !Number.isSafeInteger(deliveryCents)||deliveryCents<0||deliveryCents>100000)
     return fail(res,400,"Nederīgi zonas dati");
-  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+  if(!await hasRestaurantRole(req.user.id,id,['owner','manager']))return fail(res,403,"Nav piekļuves");
   const {data,error}=await db().from("delivery_zones").insert({
     restaurant_id:id,name:name.trim(),postal_code_prefix:postalCodePrefix,
     delivery_cents:deliveryCents,active:true
