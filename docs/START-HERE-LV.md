@@ -128,7 +128,21 @@ values ('USER_UUID'::uuid,'Kurjers A',true);
 
 **Uzmanību:** produkcijā vajadzīga kurjeru identitātes, līgumu un Stripe Connect konta pārbaude.
 
-## 10. Kas jāizdara pirms klientu palaišanas
+## 10. Sūdzības, atmaksas un kurjera GPS
+
+- Klienta lietotnē pēc **apmaksāta** pasūtījuma ir **Sūdzība / atmaksa**. Klients apraksta problēmu un piedāvā daļējās atmaksas summu.
+- Restorāna biznesa panelī ir cilne **Sūdzības**: restorāns iesniedz atbildi un ieteikto atmaksas summu. Par atkārtotām un vienlaicīgām sūdzībām vēl jāievieš papildu kontroles.
+- Operatora panelī `/admin` sūdzība tiek izskatīta; lēmums tiek saglabāts kā `approved_pending_refund`. **Tā nav naudas atmaksa.** Stripe refund API un webhook savienošana ir atsevišķs nākamais darbs.
+- Kurjera Expo lietotnē konkrētai pieņemtai piegādei var pieprasīt **priekšplāna** GPS atļauju. Kurjers var izslēgt kopīgošanu. Klienta lietotne pēc piekrišanas var manuāli pieprasīt pēdējo atrašanās vietu; kartes animācija un fona izsekošana vēl nav ieviesta.
+- GPS datu tīrīšanas funkcija: `select public.purge_expired_baitme_locations();`. Uz hostinga jāieplāno servisa lomas automātiska izpilde vismaz reizi stundā, lai dati netiktu glabāti ilgāk, nekā nepieciešams.
+- Precīzai klienta adresei vēl jāievieš adreses automātiskā pārbaude/geokodēšana (patlaban iela/māja + LV pasta indekss).
+
+## 11. Stripe pievienošanas plāns
+
+Skati [Stripe, komisiju un atmaksu drošas integrācijas dokumentu](PAYMENTS-AND-REFUNDS.md).
+Stripe API atslēgas konfigurē tikai slepenajā hostinga vidē; **NEKAD** nestūri tās mobilajās aplikācijās, GitHub vai publiskos NEXT_PUBLIC / EXPO_PUBLIC mainīgajos.
+
+## 12. Kas jāizdara pirms klientu palaišanas
 
 Skati \`docs/PRODUCTION-GATES.md\`. Pat pēc Supabase pieslēgšanas aplikāciju vēl nedrīkst izmantot naudas iekasēšanai.
 

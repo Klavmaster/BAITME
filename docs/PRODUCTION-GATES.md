@@ -6,10 +6,11 @@
 |---|---|---|
 | Klienta katalogs/grozs | Servera dati, e-pasta autentifikācija, test-order uzmetums | UX QA, pieejamība, faktiski restorāni |
 | Restorānu vadība | Lomu pārbaudes, ēdienkarte, statusi, piegādes zonas | Restorāna datu verifikācija, līgums, statusu notifikācijas |
-| Kurjera darbība | Apstiprināta kurjera pieteikšanās, atomiska job claim un apmaksātu order piegādes stāvokļi | GPS maršruts, atrašanās vieta, notifikācijas, atbalsts, KYC/līgumi |
+| Kurjera darbība | Apstiprināta kurjera pieteikšanās, atomiska job claim un apmaksātu order piegādes stāvokļi | GPS kopīgošanas atļauja un pēdējā pozīcija izveidota, bet vēl vajag karti, servera dzēšanas grafiku, izsekošanu fonā tikai ar papildu piekrišanu, notifikācijas, atbalstu, KYC/līgumus |
 | Maksājumi | Reāla apmaksa izslēgta | Stripe Connect, SCA/3DS, verificēti webhook, idempotence, refund/chargeback, ledger un reconciliation |
-| Maksājumu apstrādes izmaksas | Demo kalkulators, LIVE papildu maksa 0 | Saskaņot juristu/PSP atļauto modeli; parasta karšu surcharge Latvijā aizliegta |
+| Maksājumu apstrādes izmaksas | Klienta piemaksa 0; paredzēta restorāna apstrādes izmaksu segšana | Stripe bilanču transakciju fee precīza uzskaite un restorāna neto izmaksas, platformas risku kontrole |
 | Adreses/piegādes zonas | Pasta indeksa prefiksu sākotnējā pieeja | Reāla servera geokodēšana, zonas/attālumi, cenu pārbaude, kļūdainu adrešu apstrāde |
+| Sūdzību izskatīšana un refund | Klienta sūdzība, restorāna skaidrojums, admin lēmums **bez Stripe naudas atgriešanas** | Stripe refund izpildes rinda, idempotence, webhook, transfer reversals, paziņojumi, bankas statusu salāgošana |
 | Juridiskā atbilstība | Tikai pamatprincipu dokumentācija | GDPR, privātuma politika, noteikumi, PVN/invoicing, tiesības par restorānu pārdošanu, pārtikas drošība, kurjeru līgumi |
 | Drošība | API auth, lomas, RLS, server-side prices, SecureStore mobilajā | Rate limiting, audit, penetration testing, secret rotation, backups, monitoring, abuse/fraud controls |
 | Reliability | Automātiskie unit testi un TypeScript | DB integrācijas testi, E2E, zaudētu webhook atkopšana, finanšu invarianti |
@@ -18,7 +19,7 @@
 
 ## Maksājumu arhitektūras drošība
 
-BaitMe biznesa modelis: platformas komisija 0%, abonementi 0€, restorāna ēdiena cena 100% restorānam un piegādes cena 100% kurjeram **par sekmīgi izpildītu piegādi**. Ja klients arī segs apstrādes izmaksas, tas jāpanāk tikai tiesiski atļautā veidā. Stripe Connect separate charges and transfers platformai var nozīmēt negatīvo atlikumu, strīdu un refund atbildību; šo modeli nedrīkst uzskatīt par bezmaksas/bezriska BaitMe. Gan klienta maksa, gan nodokļi jāizvērtē individuāli.
+BaitMe biznesa modelis: platformas komisija 0%, abonementi 0€, restorāna ēdiena cena 100% restorānam un piegādes cena 100% kurjeram **par sekmīgi izpildītu piegādi**. **Jaunais apstiprinātais modelis:** restorāns sedz maksājumu apstrādes izmaksas, nevis klients. Tās jāatskaita no restorāna neto norēķina pēc Stripe faktiskā `balance_transaction.fee`, saglabājot kurjera pilnu piegādes atlīdzību un BaitMe 0% komisiju. Stripe Connect separate charges and transfers platformai var nozīmēt negatīvo atlikumu, strīdu un refund atbildību; šo modeli nedrīkst uzskatīt par bezmaksas/bezriska BaitMe. Gan klienta maksa, gan nodokļi jāizvērtē individuāli.
 
 **NEDRĪKST**: atzīmēt \`payment_status='paid'\` pēc klienta paziņojuma, izsniegt pārtiku par neapmaksātu pasūtījumu, izdarīt kurjera pārskaitījumu pirms \`delivered\`, automātiski refundēt kurjera atlīdzību bez specifikācijas.
 
