@@ -60,3 +60,12 @@ Stripe Connect testu maksājumi, maksājumu webhook ar idempotenci, daļējas at
 Pēc katras izmaiņas `main` zarā atsevišķa darbplūsma [BaitMe staging smoke](https://github.com/Klavmaster/BAITME/actions/workflows/staging-smoke.yml) pārbauda abus publiskos HTTPS serverus. Tā izsauc `/health`, `/ready`, restorānu katalogu, atteikumu anonīmam `/v1/me`, un biznesa paneļa sākumlapu. `/ready` pierāda reālu servera Supabase piekļuvi; bez slepenās atslēgas tests nevar iziet. Tā neizveido pasūtījumus, lietotājus vai maksājumus.
 
 Darbplūsmu var manuāli palaist arī GitHub Actions sadaļā. Staging pieejamības kļūda neietekmē CI lokālo PostgreSQL integrācijas testu rezultātus.
+
+## Operatora pirmā konta izveide un droša piešķiršana
+
+1. Atver https://baitme-business-web-staging.up.railway.app/apply un reģistrējies ar **savu** e-pastu un drošu paroli. Ja Supabase pieprasa e-pasta apstiprinājumu, pabeidz to, tad pieslēdzies.
+2. Pieteikuma formu nav jāiesniedz, ja esi BaitMe operators. Kad pieslēdzies, redzams tava konta UUID (`Mans BaitMe testa konta ID`).
+3. Konta ID nav parole. No šī ID pēc apstiprināšanas Supabase `platform_admins` tabulā tiek piešķirta operatora loma. Tikai autentificēts konts ar šo lomu drīkst atvērt /admin API darbības. **Nekādā gadījumā neļaut katram reģistrētam lietotājam sev piešķirt admin lomu.**
+4. Atver https://baitme-business-web-staging.up.railway.app/admin un pieslēdzies ar to pašu kontu pēc operatora lomas piešķiršanas.
+
+Svarīgi: neizveido nejaušus testa lietotājus tieši `auth.users` tabulā ar SQL; veido tos ar Supabase Auth reģistrāciju. Šobrīd nav Stripe, tādēļ visi reāli apmaksātie pasūtījumi ir bloķēti.

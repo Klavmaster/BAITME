@@ -49,7 +49,7 @@ export default function Apply(){
   <header className="top"><div className="brand">bait<span>me.</span><div className="eyebrow">Pievienoties BaitMe</div></div>
     <a className="secondary" href="/">Restorānu panelis</a></header>
   <h1>Strādā kopā ar BaitMe</h1>
-  <p className="muted">0 € abonements, 0% komisija. Uzņēmumi un kurjeri jāapstiprina pirms darba.</p>
+  <p className="muted">Restorāniem: 0 € abonements un 0,50 € BaitMe maksa par katru apmaksātu, pabeigtu pasūtījumu; Stripe apstrādes maksa atsevišķi. Kurjeriem BaitMe no piegādes atlīdzības neietur maksu. Uzņēmumi un kurjeri jāapstiprina pirms darba.</p>
   {!url||!anon||!apiUrl?<p className="error">Trūkst Supabase/API konfigurācijas.</p>:!session?
   <section className="panel" style={{maxWidth:560}}>
    <h2>Izveido kontu vai pieslēdzies</h2>
@@ -62,6 +62,7 @@ export default function Apply(){
    </div>
   </section>:<section className="panel" style={{maxWidth:690}}>
    <h2>Pieteikuma forma</h2>
+   <p className="muted">Mans BaitMe testa konta ID: <code>{session.user.id}</code>. Ja esi platformas operators, pēc reģistrācijas tev jāpiešķir platform_admins loma Supabase; pieteikumu iesniegt nav nepieciešams.</p>
    <div className="tabs">
     <button className={"tab "+(kind==="restaurant"?"active":"")} onClick={()=>setKind("restaurant")}>Restorāns</button>
     <button className={"tab "+(kind==="courier"?"active":"")} onClick={()=>setKind("courier")}>Kurjers</button>
