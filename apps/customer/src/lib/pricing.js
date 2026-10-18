@@ -52,7 +52,12 @@ function estimateProcessingFeeCents(baseCents, rateBps = 150, fixedCents = 25) {
   const initial = Math.ceil((baseCents + fixedCents) / (1 - rateBps / 10000));
   if (!Number.isSafeInteger(initial)) throw new Error('amount overflow');
   let grossCents = initial;
-  // Correct any edge cent rounding, accounting for fees on the gross amount.
+  // Round down to the first payable cent, then correct any shortfall.
+  // Percentage fee itself is rounded to integer cents.
+  while (grossCents > baseCents &&
+         grossCents - 1 - Math.round((grossCents - 1) * rateBps / 10000) - fixedCents >= baseCents) {
+    grossCents--;
+  }
   while (grossCents - Math.round(grossCents * rateBps / 10000) - fixedCents < baseCents) {
     grossCents++;
     if (!Number.isSafeInteger(grossCents)) throw new Error('amount overflow');
