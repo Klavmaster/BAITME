@@ -104,7 +104,8 @@ export default function Page(){
  if(!ready)return <main><h1>BaitMe</h1><p>Savienojam kontu…</p></main>;
  return <main>
   <header className="top"><div className="brand">bait<span>me.</span><div className="eyebrow">Restorāna vadības panelis</div></div>
-   {session&&<button className="secondary" onClick={()=>void client?.auth.signOut()}>Iziet</button>}</header>
+   <div className="cardActions"><a className="secondary" href="/apply">Pieteikties</a><a className="secondary" href="/admin">Operators</a>
+    {session&&<button className="secondary" onClick={()=>void client?.auth.signOut()}>Iziet</button>}</div></header>
   {!session?<section className="panel" style={{maxWidth:500,margin:"80px auto"}}>
     <p className="eyebrow">Restorāna konts</p><h1>Laipni lūdzam atpakaļ!</h1>
     <p className="muted">Pieslēdzies ar savu apstiprināto restorāna lietotāja kontu.</p>
