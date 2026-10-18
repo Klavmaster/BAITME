@@ -69,3 +69,17 @@ Darbplūsmu var manuāli palaist arī GitHub Actions sadaļā. Staging pieejamī
 4. Atver https://baitme-business-web-staging.up.railway.app/admin un pieslēdzies ar to pašu kontu pēc operatora lomas piešķiršanas.
 
 Svarīgi: neizveido nejaušus testa lietotājus tieši `auth.users` tabulā ar SQL; veido tos ar Supabase Auth reģistrāciju. Šobrīd nav Stripe, tādēļ visi reāli apmaksātie pasūtījumi ir bloķēti.
+
+## Kategorijas un piegādes zonas (6. migrācija)
+
+- Restorāna panelis → **Ēdienkarte**: vispirms izveido saglabājamu kategoriju, pēc tam ar **↑ Augstāk** / **↓ Zemāk** pārvieto to secībā. Kategoriju saraksts ir katram restorānam savs, nevis kopīgs visai platformai. Secība klienta katalogā nāk no DB.
+- Esošajām ēdienu kategorijām migrācija automātiski noņēma tikai liekās sākuma/beigu atstarpes un pievienoja tās saglabāto kategoriju tabulai; ēdienu cenas un pasūtījumi nav mainīti.
+- Restorāna panelis → **Piegādes zonas**: norādi sava restorāna **pilnu adresi** un **precīzas latitude/longitude koordinātas** (paņem no kartes, neuzmini), tad izveido zonas ar "No km", "Līdz km" un piegādes maksu. Piemērs: \`0–3 km / 3,50 €\`, \`3–7 km / 5,00 €\`. Katrai lokācijai jābūt savam restorāna ierakstam, ja nepieciešamas atsevišķas zonas/cenas.
+- Zonu rādiuss šobrīd ir **taisnās līnijas attālums**, nevis braukšanas kilometri vai laiks. Aktīvās radiālās zonas vienam restorānam nevar pārklāties. Cits restorāns var izvēlēties pavisam citas zonas un cenas.
+- **Drošības ierobežojums:** vēl nav integrēts uzticams klienta piegādes adreses ģeokodēšanas pakalpojums, tāpēc radius zonas var saglabāt un skatīt, taču tās **nav pasūtāmas**, kamēr serveris nespēj pats pārbaudīt attālumu. Klienta manuāli ievadīts LV pasta indekss vai pašdeklarētas koordinātas nav pierādījums par attālumu. Esošais legacy postal-prefix tests paliek tikai staging saderībai. Stripe joprojām izslēgts.
+
+### Verifikācija
+
+- GitHub Actions \`database-integration\`: pārbauda 6. migrāciju, kategoriju augšup/lejup secību, restorānu lomu izolāciju, attāluma zonu pārklāšanās aizliegumu un atteiktus radius pasūtījumus bez verificētas adreses.
+- \`build-and-test\`: React Native TypeScript, API un Next.js biznesa panelis.
+- \`staging-smoke\`: reāls HTTPS API, datubāzes un web pieejamības tests pēc izvietošanas.

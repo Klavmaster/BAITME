@@ -40,3 +40,5 @@ Atvērtā koda Kowalski no \`yarenty/kowalski\` ir atsevišķa Rust AI aģentu s
 ## Craft / FigCraft
 
 Atvērtā koda FigCraft no tava \`Klavmaster/figcraft-vendor\` repo ir dizaina izveides rīks. Oriģinālais BaitMe dizaina avots: \`design/baitme-figcraft-screens.svg\`. Importē FigCraft kā rediģējamu SVG; mobilais React Native dizains joprojām jāpielāgo tā dizaina sistēmas tokeniem.
+
+**2026-10-18 papildu produkcijas kontrole:** piegādes attāluma zonas pēc restorāna koordinātām ir ieviestas konfigurācijai, bet klienta norādītā adrese vēl netiek serverī ģeokodēta/pārbaudīta. Radius zonu pasūtīšana ir bloķēta līdz uzticamai adreses un attāluma pārbaudei. Zonu robežas šobrīd ir taisnās līnijas kilometri; pirms klientu uzņemšanas jāsaskaņo politika par ceļa kilometriem, maršrutu izmaksām un adreses verifikāciju. Ēdienkartes kategorijas ir saglabājamas/restorānam specifiskas un pārkārtojamas.

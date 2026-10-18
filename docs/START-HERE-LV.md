@@ -133,6 +133,12 @@ values ('USER_UUID'::uuid,'Kurjers A',true);
 
 **Uzmanību:** produkcijā vajadzīga kurjeru identitātes, līgumu un Stripe Connect konta pārbaude.
 
+## 9a. Kategoriju secība un piegādes zonas no restorāna
+
+Restorāna biznesa panelī sadaļā **Ēdienkarte** var pievienot saglabātas kategorijas un pārvietot tās ar pogām **↑ Augstāk / ↓ Zemāk**. Kategoriju secība tiek saglabāta atsevišķi katram restorānam. Saglabā kategoriju, pirms pievieno tai ēdienus.
+
+Sadaļā **Piegādes zonas** norādi restorāna adresi un faktiskās koordinātas, pēc tam konfigurē savus piegādes rādiusus un cenas. Aktīvas viena restorāna zonas nedrīkst pārklāties. Radius zonu pasūtīšana vēl ir bloķēta līdz drošai klienta adreses servera ģeokodēšanai.
+
 ## 10. Sūdzības, atmaksas un kurjera GPS
 
 - Klienta lietotnē pēc **apmaksāta** pasūtījuma ir **Sūdzība / atmaksa**. Klients apraksta problēmu un piedāvā daļējās atmaksas summu.
