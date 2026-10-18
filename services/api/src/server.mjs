@@ -287,30 +287,89 @@ app.patch("/v1/restaurant/:restaurantId/menu/:itemId",requireUser,wrap(async(req
   if(!data)return fail(res,404,"Ēdiens nav atrasts");
   res.json({id:data.id});
 }));
+// Every restaurant configures its own pickup point. Radius zones are measured
+// as straight-line distance from these coordinates, NOT the courier route.
+app.get("/v1/restaurant/:restaurantId/location",requireUser,wrap(async(req,res)=>{
+ const id=req.params.restaurantId;
+ if(!uuid(id))return fail(res,400,"Nederīgs restorāna ID");
+ if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().from("restaurants")
+  .select("pickup_address,latitude,longitude").eq("id",id).single();
+ if(error)return controlledError(res,error);
+ res.json({location:data});
+}));
+app.put("/v1/restaurant/:restaurantId/location",requireUser,wrap(async(req,res)=>{
+ const id=req.params.restaurantId;
+ const {pickupAddress,latitude,longitude}=req.body||{};
+ if(!uuid(id)||typeof pickupAddress!=="string"||pickupAddress.trim().length<5||
+  pickupAddress.trim().length>300||![latitude,longitude].every(Number.isFinite)||
+  latitude< -90||latitude>90||longitude< -180||longitude>180)
+  return fail(res,400,"Nederīga restorāna atrašanās vieta");
+ if(!await hasRestaurantRole(req.user.id,id,["owner","manager"]))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().from("restaurants")
+  .update({pickup_address:pickupAddress.trim(),latitude,longitude})
+  .eq("id",id).select("id").maybeSingle();
+ if(error)return controlledError(res,error);
+ if(!data)return fail(res,404,"Restorāns nav atrasts");
+ res.json({saved:true});
+}));
 app.get("/v1/restaurant/:restaurantId/zones",requireUser,wrap(async(req,res)=>{
-  const id=req.params.restaurantId;
-  if(!uuid(id))return fail(res,400,"Nederīgs ID");
-  if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
-  const {data,error}=await db().from("delivery_zones")
-    .select("id,name,postal_code_prefix,delivery_cents,active")
-    .eq("restaurant_id",id).order("name").limit(100);
-  if(error)return controlledError(res,error);
-  res.json({zones:data});
+ const id=req.params.restaurantId;
+ if(!uuid(id))return fail(res,400,"Nederīgs ID");
+ if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().from("delivery_zones")
+  .select("id,name,zone_type,postal_code_prefix,min_distance_m,max_distance_m,delivery_cents,active")
+  .eq("restaurant_id",id).order("min_distance_m",{nullsFirst:true}).order("name").limit(100);
+ if(error)return controlledError(res,error);
+ res.json({zones:data});
 }));
 app.post("/v1/restaurant/:restaurantId/zones",requireUser,wrap(async(req,res)=>{
-  const id=req.params.restaurantId;
-  const {name,postalCodePrefix,deliveryCents}=req.body||{};
-  if(!uuid(id)||typeof name!=="string"||name.trim().length<2||name.length>80||
-      typeof postalCodePrefix!=="string"||!/^LV-[0-9]{1,4}$/.test(postalCodePrefix)||
-      !Number.isSafeInteger(deliveryCents)||deliveryCents<0||deliveryCents>100000)
-    return fail(res,400,"Nederīgi zonas dati");
-  if(!await hasRestaurantRole(req.user.id,id,['owner','manager']))return fail(res,403,"Nav piekļuves");
-  const {data,error}=await db().from("delivery_zones").insert({
-    restaurant_id:id,name:name.trim(),postal_code_prefix:postalCodePrefix,
-    delivery_cents:deliveryCents,active:true
-  }).select("id").single();
-  if(error)return controlledError(res,error);
-  res.status(201).json({id:data.id});
+ const id=req.params.restaurantId;
+ const {name,minDistanceM,maxDistanceM,deliveryCents}=req.body||{};
+ if(!uuid(id)||typeof name!=="string"||name.trim().length<2||name.trim().length>80||
+ !Number.isSafeInteger(minDistanceM)||minDistanceM<0||
+ !Number.isSafeInteger(maxDistanceM)||maxDistanceM<=minDistanceM||maxDistanceM>100000||
+ !Number.isSafeInteger(deliveryCents)||deliveryCents<0||deliveryCents>100000)
+ return fail(res,400,"Nederīgi piegādes attālumi vai maksa");
+ if(!await hasRestaurantRole(req.user.id,id,["owner","manager"]))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().from("delivery_zones").insert({
+  restaurant_id:id,name:name.trim(),zone_type:"radius",postal_code_prefix:null,
+  min_distance_m:minDistanceM,max_distance_m:maxDistanceM,
+  delivery_cents:deliveryCents,active:true
+ }).select("id").single();
+ if(error?.code==="P0001"||error?.code==="23514")return fail(res,400,
+  "Vispirms norādi restorāna atrašanās vietu; aktīvas zonas nedrīkst pārklāties");
+ if(error)return controlledError(res,error);
+ res.status(201).json({id:data.id});
+}));
+app.patch("/v1/restaurant/:restaurantId/zones/:zoneId",requireUser,wrap(async(req,res)=>{
+ const {restaurantId,zoneId}=req.params;
+ if(!uuid(restaurantId)||!uuid(zoneId))return fail(res,400,"Nederīgs ID");
+ if(!await hasRestaurantRole(req.user.id,restaurantId,["owner","manager"]))
+  return fail(res,403,"Nav piekļuves");
+ const allowed=new Set(["name","active","delivery_cents","min_distance_m","max_distance_m"]);
+ const patch={};
+ for(const [key,value] of Object.entries(req.body||{})){
+  if(!allowed.has(key))return fail(res,400,"Neatļauts zonas lauks");
+  if(key==="name"&&(typeof value!=="string"||value.trim().length<2||value.trim().length>80))
+   return fail(res,400,"Nederīgs nosaukums");
+  if(key==="active"&&typeof value!=="boolean")return fail(res,400,"Nederīgs statuss");
+  if(key==="delivery_cents"&&(!Number.isSafeInteger(value)||value<0||value>100000))
+   return fail(res,400,"Nederīga piegādes cena");
+  if(["min_distance_m","max_distance_m"].includes(key)&&
+    (!Number.isSafeInteger(value)||value<0||value>100000))
+   return fail(res,400,"Nederīgs attālums");
+  patch[key]=typeof value==="string"?value.trim():value;
+ }
+ if(!Object.keys(patch).length)return fail(res,400,"Nav izmaiņu");
+ const {data,error}=await db().from("delivery_zones").update(patch)
+  .eq("id",zoneId).eq("restaurant_id",restaurantId).eq("zone_type","radius")
+  .select("id").maybeSingle();
+ if(error?.code==="P0001"||error?.code==="23514")return fail(res,400,
+  "Piegādes zonas nedrīkst pārklāties vai būt ārpus atļautā diapazona");
+ if(error)return controlledError(res,error);
+ if(!data)return fail(res,404,"Attāluma zona nav atrasta");
+ res.json({id:data.id});
 }));
 app.get("/v1/restaurant/:restaurantId/summary",requireUser,wrap(async(req,res)=>{
   const id=req.params.restaurantId;
