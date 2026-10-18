@@ -271,7 +271,7 @@ app.post("/v1/restaurant/:restaurantId/orders/:orderId/status",requireUser,wrap(
 app.get("/v1/courier/jobs",requireUser,wrap(async(req,res)=>{
   if(!await hasCourierRole(req.user.id))return fail(res,403,"Kurjers nav apstiprināts");
   const {data,error}=await db().from("orders")
-    .select("id,restaurant_id,address_line,postal_code,delivery_cents,status,created_at")
+    .select("id,restaurant_id,postal_code,delivery_cents,status,created_at")
     .eq("payment_status","paid").eq("status","ready_for_pickup")
     .is("courier_id",null).order("created_at").limit(50);
   if(error)return controlledError(res,error);
