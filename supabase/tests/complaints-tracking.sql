@@ -7,6 +7,7 @@ declare
  v_admin uuid := '77777777-7777-4777-8777-777777777777';
  v_restaurant uuid; v_item uuid; v_zone uuid; v_order uuid; v_case uuid;
  v_location public.courier_live_locations%rowtype;
+ v_removed integer;
  v_case_row public.complaint_cases%rowtype;
 begin
  insert into auth.users(id) values (v_owner),(v_customer),(v_courier),(v_admin);
@@ -83,8 +84,9 @@ begin
  then raise exception 'location revoke did not delete point';end if;
  perform public.upsert_baitme_courier_location(v_courier,v_order,56.95,24.11,20);
  update public.orders set status='delivered' where id=v_order;
- if public.purge_expired_baitme_locations()<>1 or
-    exists(select 1 from public.courier_live_locations where order_id=v_order)
- then raise exception 'completed delivery location not purged';end if;
+ -- Never rely on SQL boolean short-circuit evaluation order for a mutating function.
+ v_removed:=public.purge_expired_baitme_locations();
+ if v_removed<>1 or exists(select 1 from public.courier_live_locations where order_id=v_order)
+ then raise exception 'completed delivery location not purged: %',v_removed;end if;
  raise notice 'Complaint and opt-in courier location smoke tests passed';
 end $$;
