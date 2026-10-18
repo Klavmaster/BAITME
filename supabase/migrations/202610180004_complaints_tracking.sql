@@ -154,3 +154,37 @@ begin
 end; $$;
 revoke all on function public.purge_expired_baitme_locations() from public,anon,authenticated;
 grant execute on function public.purge_expired_baitme_locations() to service_role;
+
+-- Atomic location write: only courier on their ACTIVE paid assignment.
+create or replace function public.upsert_baitme_courier_location(
+ p_courier uuid,p_order uuid,p_lat double precision,p_lng double precision,p_accuracy double precision
+) returns uuid language plpgsql security definer set search_path=public as $$
+declare v_id uuid;
+begin
+ if p_lat is null or p_lng is null or p_accuracy is null
+   or not isfinite(p_lat) or not isfinite(p_lng) or not isfinite(p_accuracy)
+   or p_lat not between -90 and 90 or p_lng not between -180 and 180
+   or p_accuracy not between 0 and 1000
+ then raise exception 'invalid location'; end if;
+ select id into v_id from public.orders
+  where id=p_order and courier_id=p_courier and payment_status='paid'
+  and status in ('ready_for_pickup','picked_up') for update;
+ if not found then raise exception 'not an active courier assignment'; end if;
+ insert into public.courier_live_locations(order_id,courier_id,latitude,longitude,accuracy_m,updated_at)
+ values(v_id,p_courier,p_lat,p_lng,p_accuracy,now())
+ on conflict(order_id) do update set
+  latitude=excluded.latitude,longitude=excluded.longitude,
+  accuracy_m=excluded.accuracy_m,updated_at=now(),courier_id=excluded.courier_id;
+ return v_id;
+end; $$;
+create or replace function public.stop_baitme_courier_location(p_courier uuid,p_order uuid)
+returns uuid language plpgsql security definer set search_path=public as $$
+begin
+ delete from public.courier_live_locations
+  where order_id=p_order and courier_id=p_courier;
+ return p_order;
+end; $$;
+revoke all on function public.upsert_baitme_courier_location(uuid,uuid,double precision,double precision,double precision) from public,anon,authenticated;
+revoke all on function public.stop_baitme_courier_location(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.upsert_baitme_courier_location(uuid,uuid,double precision,double precision,double precision) to service_role;
+grant execute on function public.stop_baitme_courier_location(uuid,uuid) to service_role;
