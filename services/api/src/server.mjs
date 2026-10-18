@@ -69,14 +69,21 @@ app.get("/v1/restaurants/:id/menu",wrap(async(req,res)=>{
    .eq("id",req.params.id).eq("published",true).maybeSingle();
   if(e1)return controlledError(res,e1);
   if(!restaurant)return fail(res,404,"Restorāns nav atrasts");
-  const [items,zones]=await Promise.all([
-    db().from("menu_items").select("id,name,description,price_cents,image_url,category")
+  const [items,zones,categories]=await Promise.all([
+    db().from("menu_items").select("id,name,description,price_cents,image_url,category,sort_order")
       .eq("restaurant_id",restaurant.id).eq("available",true).order("sort_order").limit(200),
-    db().from("delivery_zones").select("id,name,postal_code_prefix,delivery_cents")
-      .eq("restaurant_id",restaurant.id).eq("active",true).limit(100)
+    db().from("delivery_zones")
+      .select("id,name,zone_type,postal_code_prefix,min_distance_m,max_distance_m,delivery_cents")
+      .eq("restaurant_id",restaurant.id).eq("active",true).order("min_distance_m",{nullsFirst:true}).limit(100),
+    db().from("menu_categories").select("id,name,sort_order")
+      .eq("restaurant_id",restaurant.id).order("sort_order").order("id").limit(100)
   ]);
-  if(items.error||zones.error)return controlledError(res,items.error||zones.error);
-  res.json({restaurant,items:items.data,deliveryZones:zones.data});
+  if(items.error||zones.error||categories.error)return controlledError(res,items.error||zones.error||categories.error);
+  const indexes=new Map(categories.data.map((x,i)=>[x.name,i]));
+  const orderedItems=[...items.data].sort((a,b)=>
+    (indexes.get(a.category)??9999)-(indexes.get(b.category)??9999)||
+    a.sort_order-b.sort_order||a.name.localeCompare(b.name,"lv"));
+  res.json({restaurant,items:orderedItems,deliveryZones:zones.data,categories:categories.data});
 }));
 app.get("/v1/me",requireUser,(req,res)=>res.json({id:req.user.id,email:req.user.email}));
 
@@ -181,6 +188,47 @@ app.get("/v1/restaurant/mine",requireUser,wrap(async(req,res)=>{
   if(err)return controlledError(res,err);
   res.json({restaurants:data.map(x=>({...x,role:staff.find(s=>s.restaurant_id===x.id)?.role}))});
 }));
+const validMenuCategory=value=>typeof value==="string"&&value.trim().length>=2&&value.trim().length<=80&&value.length<=90;
+
+app.get("/v1/restaurant/:restaurantId/categories",requireUser,wrap(async(req,res)=>{
+ const id=req.params.restaurantId;
+ if(!uuid(id))return fail(res,400,"Nederīgs restorāna ID");
+ if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().from("menu_categories").select("id,name,sort_order")
+  .eq("restaurant_id",id).order("sort_order").order("id").limit(100);
+ if(error)return controlledError(res,error);
+ res.json({categories:data});
+}));
+app.post("/v1/restaurant/:restaurantId/categories",requireUser,wrap(async(req,res)=>{
+ const id=req.params.restaurantId,name=req.body?.name;
+ if(!uuid(id)||!validMenuCategory(name))return fail(res,400,"Nederīga kategorija");
+ if(!await hasRestaurantRole(req.user.id,id,["owner","manager"]))return fail(res,403,"Nav piekļuves");
+ const label=name.trim();
+ const {data:rows,error:readErr}=await db().from("menu_categories")
+  .select("sort_order").eq("restaurant_id",id).order("sort_order",{ascending:false}).limit(100);
+ if(readErr)return controlledError(res,readErr);
+ if(rows.length>=100)return fail(res,400,"Pārsniegts kategoriju skaits");
+ const {data,error}=await db().from("menu_categories").insert({
+  restaurant_id:id,name:label,sort_order:rows.length?rows[0].sort_order+10:10
+ }).select("id").single();
+ if(error?.code==="23505")return fail(res,409,"Šāda kategorija jau pastāv");
+ if(error)return controlledError(res,error);
+ res.status(201).json({id:data.id});
+}));
+app.post("/v1/restaurant/:restaurantId/categories/:categoryId/move",requireUser,wrap(async(req,res)=>{
+ const {restaurantId,categoryId}=req.params;
+ const {direction}=req.body||{};
+ if(!uuid(restaurantId)||!uuid(categoryId)||!["up","down"].includes(direction))
+  return fail(res,400,"Nederīga kategorijas secība");
+ if(!await hasRestaurantRole(req.user.id,restaurantId,["owner","manager"]))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().rpc("move_baitme_category",{
+  p_actor:req.user.id,p_restaurant:restaurantId,p_category:categoryId,
+  p_direction:direction==="up"?-1:1
+ });
+ if(error)return controlledError(res,error);
+ res.json({moved:data});
+}));
+
 app.get("/v1/restaurant/:restaurantId/menu",requireUser,wrap(async(req,res)=>{
   const id=req.params.restaurantId;
   if(!uuid(id))return fail(res,400,"Nederīgs ID");
@@ -200,8 +248,12 @@ app.post("/v1/restaurant/:restaurantId/menu",requireUser,wrap(async(req,res)=>{
       !Number.isSafeInteger(priceCents)||priceCents<0||priceCents>1000000)
     return fail(res,400,"Nederīgi ēdiena dati");
   if(!await hasRestaurantRole(req.user.id,id,['owner','manager']))return fail(res,403,"Nav piekļuves");
+  const {data:matching,error:categoryError}=await db().from("menu_categories")
+    .select("id").eq("restaurant_id",id).eq("name",category.trim()).maybeSingle();
+  if(categoryError)return controlledError(res,categoryError);
+  if(!matching)return fail(res,400,"Vispirms saglabā ēdienkartes kategoriju");
   const {data,error}=await db().from("menu_items").insert({
-    restaurant_id:id,name:name.trim(),description,category,price_cents:priceCents,
+    restaurant_id:id,name:name.trim(),description,category:category.trim(),price_cents:priceCents,
     available:true
   }).select("id").single();
   if(error)return controlledError(res,error);
@@ -223,6 +275,12 @@ app.patch("/v1/restaurant/:restaurantId/menu/:itemId",requireUser,wrap(async(req
     patch[key]=typeof value==="string"?value.trim():value;
   }
   if(!Object.keys(patch).length)return fail(res,400,"Nav izmaiņu");
+  if(patch.category){
+   const {data:matching,error:categoryError}=await db().from("menu_categories")
+    .select("id").eq("restaurant_id",restaurantId).eq("name",patch.category).maybeSingle();
+   if(categoryError)return controlledError(res,categoryError);
+   if(!matching)return fail(res,400,"Kategorija nav saglabāta šajā restorānā");
+  }
   const {data,error}=await db().from("menu_items").update(patch)
     .eq("id",itemId).eq("restaurant_id",restaurantId).select("id").maybeSingle();
   if(error)return controlledError(res,error);
