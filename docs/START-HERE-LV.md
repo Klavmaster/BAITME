@@ -84,7 +84,21 @@ npm run courier
 
 Pirmajā reizē restorānu saraksts būs tukšs, kamēr nav ievadīti restorāni. Expo bez vides konfigurācijas rāda demonstrācijas datus.
 
-## 7. Pievienot pirmo restorānu
+## 7. Operatora konts un pieteikumi
+
+1. Supabase Authentication → Users: izveido savu operatora kontu un nokopē UUID.
+2. SQL Editor:
+
+\`\`\`sql
+insert into public.platform_admins(user_id)
+values ('ADMIN_USER_UUID'::uuid);
+\`\`\`
+
+3. Atver \`http://localhost:3000/admin\`, pieslēdzies ar operatora kontu. Šeit var apstiprināt saņemtos pieteikumus. **Restorāns netiks automātiski publicēts; kurjers netiks automātiski aktivizēts.**
+4. Jauni restorāni un kurjeri iesniedz pieteikumu \`http://localhost:3000/apply\`.
+5. Kad pārbaudīti dokumenti, uzņēmuma konts un piegādes iespējas, administratīvi ieslēdz \`restaurants.published=true\` vai \`courier_profiles.approved=true\`. Stripe Connect saņēmēja identitāte jāpārbauda pirms reālām izmaksām.
+
+## 8. Pievienot pirmo restorānu manuāli (alternatīva)
 
 1. Supabase → Authentication → Users: izveido restorāna darbinieka kontu un nokopē tā lietotāja \`UUID\`.
 2. SQL Editor aizstāj \`USER_UUID\` ar šo UUID:
@@ -102,7 +116,7 @@ select id,'USER_UUID'::uuid,'owner' from r;
 3. Atver biznesa paneli, pieslēdzies ar restorāna kontu, pievieno ēdienus un piegādes zonas.
 4. Klientu lietotnē ar konfigurētām Supabase/API adresēm parādīsies jaunais restorāns.
 
-## 8. Apstiprināt kurjeru (staging)
+## 9. Apstiprināt kurjeru manuāli (staging)
 
 1. Izveido kurjera Supabase Auth kontu, pieraksti tā UUID.
 2. SQL Editor:
@@ -114,7 +128,7 @@ values ('USER_UUID'::uuid,'Kurjers A',true);
 
 **Uzmanību:** produkcijā vajadzīga kurjeru identitātes, līgumu un Stripe Connect konta pārbaude.
 
-## 9. Kas jāizdara pirms klientu palaišanas
+## 10. Kas jāizdara pirms klientu palaišanas
 
 Skati \`docs/PRODUCTION-GATES.md\`. Pat pēc Supabase pieslēgšanas aplikāciju vēl nedrīkst izmantot naudas iekasēšanai.
 

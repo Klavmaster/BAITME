@@ -13,7 +13,7 @@
 | Juridiskā atbilstība | Tikai pamatprincipu dokumentācija | GDPR, privātuma politika, noteikumi, PVN/invoicing, tiesības par restorānu pārdošanu, pārtikas drošība, kurjeru līgumi |
 | Drošība | API auth, lomas, RLS, server-side prices, SecureStore mobilajā | Rate limiting, audit, penetration testing, secret rotation, backups, monitoring, abuse/fraud controls |
 | Reliability | Automātiskie unit testi un TypeScript | DB integrācijas testi, E2E, zaudētu webhook atkopšana, finanšu invarianti |
-| Ops/admin | Restorāna biznesa panelis | Platformas administratora UI, restorānu/kurjeru apstiprināšana, strīdi, refunds, failover |
+| Ops/admin | Biznesa panelis, platformas operatora pieteikumu UI un manuāla priekšapstiprināšana | Pilna KYC verifikācija, restorāna publicēšanas/kuriers aktivācijas UI, strīdi, refunds, failover |
 | Publicēšana | Lokāla Expo/Next/API palaišana | HTTPS, domēni, Apple App Store/Google Play konti, review, release pipeline |
 
 ## Maksājumu arhitektūras drošība
