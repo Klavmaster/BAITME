@@ -197,7 +197,7 @@ export default function LiveHome(){
     <TextInput placeholder="Meklēt restorānus..." value={search} onChangeText={setSearch} style={styles.input}/>
     <View style={styles.banner}>
      <Text style={styles.bannerTitle}>0% platformas komisija ✨</Text>
-     <Text style={styles.bannerText}>Restorānam pilna ēdiena cena. Kurjeram pilna piegādes cena.</Text>
+     <Text style={styles.bannerText}>Restorāns sedz maksājumu apstrādes izmaksas. Kurjers saņem pilnu piegādes maksu.</Text>
     </View>
     <Text style={styles.subtitle}>Restorāni</Text>
     {!visible.length&&<Text style={styles.muted}>Restorānu vēl nav. Biznesa panelī jāievada un jāpublicē restorāni.</Text>}
@@ -246,10 +246,10 @@ export default function LiveHome(){
      <View style={styles.billRow}><Text>Ēdiens</Text><Text>{money(foodCents)}</Text></View>
      <View style={styles.billRow}><Text>Piegāde</Text><Text>{money(deliveryCents)}</Text></View>
      <View style={styles.billRow}><Text>BaitMe komisija</Text><Text>0,00 €</Text></View>
-     <View style={styles.billRow}><Text>Maksājumu apstrādes piemaksa*</Text><Text>0,00 €</Text></View>
+     <View style={styles.billRow}><Text>Maksājumu apstrādes piemaksa</Text><Text>0,00 €</Text></View>
      <View style={styles.billRow}><Text style={styles.cardTitle}>Kopā</Text><Text style={styles.cardTitle}>{money(totalCents)}</Text></View>
     </View>
-    <Text style={styles.muted}>* Par parastu patērētāju karti Latvijā nedrīkst iekasēt papildmaksu. Maksājumi vēl nav pieslēgti.</Text>
+    <Text style={styles.muted}>Maksājumu apstrādes izmaksas sedz restorāns no ēdiena ieņēmumiem. Klientam nav papildu kartes piemaksas. Maksājumi vēl nav pieslēgti.</Text>
     <Button disabled={!count||busy||!selectedZone} onPress={()=>void makeDraft()}>Izveidot tikai testa pasūtījumu</Button>
     <Text style={styles.warning}>Tas nav īsts pasūtījums! Ēdiens netiks gatavots un kurjers netiks nosūtīts.</Text>
    </>}

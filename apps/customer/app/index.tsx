@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { restaurants, Restaurant, MenuItem } from '../src/data/demo';
 import LiveHome from '../src/LiveHome';
-import { calculateBreakdown, estimateProcessingFeeCents, formatEuro } from '../src/lib/pricing';
+import { calculateBreakdown, formatEuro } from '../src/lib/pricing';
 
 const PURPLE = '#6B4FEF';
 const INK = '#1E1B2E';
@@ -40,10 +40,10 @@ function DemoCustomerHome() {
     .filter((item) => (quantities[item.id] || 0) > 0)
     .map((item) => ({ unitPriceCents: item.priceCents, quantity: quantities[item.id] })) || [];
   const baseBreakdown = calculateBreakdown(lines, count > 0 ? (cartRestaurant?.deliveryCents || 0) : 0);
-  // DEMO simulation only. Live card-processing surcharges are legally restricted
-  // in Latvia/EEA; keep payment disabled until compliance and Stripe review.
-  const processingFeePreviewCents = estimateProcessingFeeCents(baseBreakdown.totalCents);
-  const breakdown = calculateBreakdown(lines, baseBreakdown.deliveryCents, processingFeePreviewCents);
+  // Customer pays only restaurant food price + courier delivery.
+  // Stripe processing costs are allocated to the restaurant in a verified
+  // settlement later; they are NEVER a checkout surcharge.
+  const breakdown = calculateBreakdown(lines, baseBreakdown.deliveryCents, 0);
 
   const filtered = useMemo(() => restaurants.filter((r) =>
     (category === 'Visi' || r.category === category) &&
@@ -108,7 +108,7 @@ function DemoCustomerHome() {
                 <View style={styles.summary}>
                   <View style={styles.amountRow}><Text>Ēdiens</Text><Text>{formatEuro(breakdown.foodCents)}</Text></View>
                   <View style={styles.amountRow}><Text>Piegāde (kurjeram 100%)</Text><Text>{formatEuro(breakdown.deliveryCents)}</Text></View>
-                  <View style={styles.amountRow}><Text>Apstrādes izmaksu piemērs*</Text><Text>{formatEuro(breakdown.processingFeeCents)}</Text></View>
+                  <View style={styles.amountRow}><Text>Klienta maksājumu apstrādes piemaksa</Text><Text>0,00 €</Text></View>
                   <View style={styles.amountRow}><Text>BaitMe komisija</Text><Text>0,00 €</Text></View>
                   <View style={[styles.amountRow, styles.totalRow]}>
                     <Text style={styles.totalText}>Kopā</Text>
@@ -116,7 +116,7 @@ function DemoCustomerHome() {
                   </View>
                 </View>
                 <Text style={styles.info}>
-                  *Tikai simulācija ar standarta EEZ kartes likmes piemēru (1,5% + 0,25 €). Latvijā papildu maksa par parastu kartes izmantošanu ir aizliegta. Reāli maksājumi ir atspējoti, un šī summa netiek iekasēta. Restorāna ēdiena daļa: {formatEuro(breakdown.restaurantReceivesCents)}; kurjera piegādes daļa: {formatEuro(breakdown.courierReceivesCents)}.
+                  Restorāns sedz maksājumu apstrādes izmaksas no saviem ieņēmumiem, kad tās būs pārbaudītas Stripe Connect. Klients papildu kartes maksu nemaksā. Restorāna ēdiena daļa pirms apstrādes izmaksām: {formatEuro(breakdown.restaurantReceivesCents)}; kurjera piegādes daļa: {formatEuro(breakdown.courierReceivesCents)}. Reāli maksājumi vēl nav pieslēgti.
                 </Text>
                 <View style={styles.disabledButton}>
                   <Text style={styles.disabledText}>Demo — apmaksa nav pieejama</Text>
@@ -199,7 +199,7 @@ function DemoCustomerHome() {
             </ScrollView>
             <View style={styles.valueBanner}>
               <Text style={styles.bannerTitle}>0% BaitMe komisija ✨</Text>
-              <Text style={styles.bannerText}>Restorānam pilna ēdiena cena, kurjeram pilna piegādes cena. Apstrādes izmaksas redzi groza piemērā.</Text>
+              <Text style={styles.bannerText}>Restorāns sedz maksājumu apstrādi, kurjers saņem pilnu piegādes maksu. Klients nemaksā BaitMe komisiju.</Text>
             </View>
             <Text style={styles.sectionTitle}>Garšīgākā izvēle tev</Text>
             <Text style={styles.demoNote}>Šobrīd redzami tikai paraugdati.</Text>
