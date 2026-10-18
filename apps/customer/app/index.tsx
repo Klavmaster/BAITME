@@ -1,0 +1,293 @@
+import { useMemo, useState } from 'react';
+import {
+  ScrollView, View, Text, TextInput, Pressable, StyleSheet,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { restaurants, Restaurant, MenuItem } from '../src/data/demo';
+import { calculateBreakdown, formatEuro } from '../src/lib/pricing';
+
+const PURPLE = '#6547EC';
+const INK = '#1E1C2A';
+const categories = ['Visi', 'Burgeri', 'Pica', 'Āzijas'];
+
+function SmallTag({ children }: { children: string }) {
+  return <View style={styles.tag}><Text style={styles.tagText}>{children}</Text></View>;
+}
+
+function RoundedButton({ title, onPress, subtle = false }: {
+  title: string; onPress: () => void; subtle?: boolean;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.roundedButton, subtle && styles.lightButton]}>
+      <Text style={[styles.roundedButtonText, subtle && styles.lightButtonText]}>{title}</Text>
+    </Pressable>
+  );
+}
+
+export default function CustomerHome() {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState('Visi');
+  const [selectedRestaurant, setSelectedRestaurant] = useState<Restaurant | null>(null);
+  const [cartRestaurantId, setCartRestaurantId] = useState<string | null>(null);
+  const [quantities, setQuantities] = useState<Record<string, number>>({});
+  const [showCart, setShowCart] = useState(false);
+
+  const cartRestaurant = restaurants.find((r) => r.id === cartRestaurantId);
+  const count = Object.values(quantities).reduce((sum, n) => sum + n, 0);
+  const lines = cartRestaurant?.menu
+    .filter((item) => (quantities[item.id] || 0) > 0)
+    .map((item) => ({ unitPriceCents: item.priceCents, quantity: quantities[item.id] })) || [];
+  const breakdown = calculateBreakdown(lines, count > 0 ? (cartRestaurant?.deliveryCents || 0) : 0);
+
+  const filtered = useMemo(() => restaurants.filter((r) =>
+    (category === 'Visi' || r.category === category) &&
+    (r.name.toLocaleLowerCase('lv-LV').includes(search.toLocaleLowerCase('lv-LV')) ||
+     r.category.toLocaleLowerCase('lv-LV').includes(search.toLocaleLowerCase('lv-LV')))
+  ), [category, search]);
+
+  function addItem(item: MenuItem) {
+    if (!selectedRestaurant) return;
+    if (cartRestaurantId !== selectedRestaurant.id) {
+      setCartRestaurantId(selectedRestaurant.id);
+      setQuantities({ [item.id]: 1 });
+      return;
+    }
+    setQuantities((old) => ({ ...old, [item.id]: (old[item.id] || 0) + 1 }));
+  }
+
+  function changeQuantity(itemId: string, amount: number) {
+    setQuantities((old) => {
+      const next = { ...old };
+      const quantity = Math.max(0, (next[itemId] || 0) + amount);
+      if (quantity === 0) delete next[itemId];
+      else next[itemId] = quantity;
+      return next;
+    });
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" />
+      {showCart ? (
+        <>
+          <View style={styles.topBar}>
+            <Pressable accessibilityRole="button" onPress={() => setShowCart(false)}>
+              <Text style={styles.back}>‹ Atpakaļ</Text>
+            </Pressable>
+            <Text style={styles.navTitle}>Tavs grozs</Text>
+          </View>
+          <ScrollView contentContainerStyle={styles.scrollBody}>
+            <Text style={styles.overline}>DEMONSTRĀCIJAS REŽĪMS</Text>
+            <Text style={styles.pageTitle}>Grozs 🛍️</Text>
+            {count === 0 || !cartRestaurant ? (
+              <Text style={styles.muted}>Grozs ir tukšs. Izvēlies restorānu un pievieno ēdienu!</Text>
+            ) : (
+              <>
+                <Text style={styles.sectionTitle}>{cartRestaurant.name}</Text>
+                {cartRestaurant.menu.filter((item) => (quantities[item.id] || 0) > 0).map((item) => (
+                  <View key={item.id} style={styles.cartLine}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.menuName}>{item.name}</Text>
+                      <Text style={styles.muted}>{formatEuro(item.priceCents)}</Text>
+                    </View>
+                    <Pressable accessibilityLabel={'Noņemt vienu ' + item.name} onPress={() => changeQuantity(item.id, -1)} style={styles.qtyButton}>
+                      <Text style={styles.qtyText}>−</Text>
+                    </Pressable>
+                    <Text style={styles.qtyNumber}>{quantities[item.id]}</Text>
+                    <Pressable accessibilityLabel={'Pievienot vienu ' + item.name} onPress={() => changeQuantity(item.id, 1)} style={styles.qtyButton}>
+                      <Text style={styles.qtyText}>+</Text>
+                    </Pressable>
+                  </View>
+                ))}
+                <View style={styles.summary}>
+                  <View style={styles.amountRow}><Text>Ēdiens</Text><Text>{formatEuro(breakdown.foodCents)}</Text></View>
+                  <View style={styles.amountRow}><Text>Piegāde (kurjeram 100%)</Text><Text>{formatEuro(breakdown.deliveryCents)}</Text></View>
+                  <View style={styles.amountRow}><Text>BaitMe servisa maksa</Text><Text>0,00 €</Text></View>
+                  <View style={[styles.amountRow, styles.totalRow]}>
+                    <Text style={styles.totalText}>Kopā</Text>
+                    <Text style={styles.totalText}>{formatEuro(breakdown.totalCents)}</Text>
+                  </View>
+                </View>
+                <Text style={styles.info}>
+                  Restorāns saņem {formatEuro(breakdown.restaurantReceivesCents)}, kurjers par pabeigtu piegādi saņem {formatEuro(breakdown.courierReceivesCents)}. Maksājumi nav pieslēgti.
+                </Text>
+                <View style={styles.disabledButton}>
+                  <Text style={styles.disabledText}>Apmaksa vēl nav pieejama</Text>
+                </View>
+                <RoundedButton title="Iztukšot grozu" subtle onPress={() => {
+                  setQuantities({});
+                  setCartRestaurantId(null);
+                }} />
+              </>
+            )}
+          </ScrollView>
+        </>
+      ) : selectedRestaurant ? (
+        <>
+          <View style={styles.topBar}>
+            <Pressable accessibilityRole="button" onPress={() => setSelectedRestaurant(null)}>
+              <Text style={styles.back}>‹ Restorāni</Text>
+            </Pressable>
+            <Text style={styles.navTitle}>BaitMe</Text>
+          </View>
+          <ScrollView contentContainerStyle={styles.scrollBody}>
+            <View style={[styles.hero, { backgroundColor: selectedRestaurant.accent }]}>
+              <Text style={styles.heroEmoji}>{selectedRestaurant.emoji}</Text>
+            </View>
+            <Text style={styles.overline}>DEMO RESTORĀNS</Text>
+            <Text style={styles.pageTitle}>{selectedRestaurant.name}</Text>
+            <Text style={styles.muted}>{selectedRestaurant.tagline}</Text>
+            <View style={styles.metaRow}>
+              <SmallTag>{'★ ' + selectedRestaurant.rating}</SmallTag>
+              <SmallTag>{'⏱ ' + selectedRestaurant.eta}</SmallTag>
+              <SmallTag>{'Piegāde ' + formatEuro(selectedRestaurant.deliveryCents)}</SmallTag>
+            </View>
+            <Text style={styles.sectionTitle}>Ēdienkarte</Text>
+            {selectedRestaurant.menu.map((item) => (
+              <View key={item.id} style={styles.menuCard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.menuName}>{item.name}</Text>
+                  <Text style={styles.muted}>{item.description}</Text>
+                  <Text style={styles.menuPrice}>{formatEuro(item.priceCents)}</Text>
+                </View>
+                <View style={styles.menuRight}>
+                  <Text style={styles.menuEmoji}>{item.emoji}</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel={'Pievienot ' + item.name}
+                    onPress={() => addItem(item)} style={styles.addButton}>
+                    <Text style={styles.addButtonText}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+            {cartRestaurantId && cartRestaurantId !== selectedRestaurant.id && count > 0 && (
+              <Text style={styles.info}>Pievienojot ēdienu no cita restorāna, pašreizējais grozs tiks aizstāts.</Text>
+            )}
+          </ScrollView>
+        </>
+      ) : (
+        <>
+          <View style={styles.homeHeader}>
+            <Text style={styles.brand}>bait<Text style={styles.brandAccent}>me.</Text></Text>
+            <Text style={styles.overline}>PIEGĀDE UZ</Text>
+            <Text style={styles.location}>📍 Latvija · izvēlies adresi vēlāk</Text>
+            <Text style={styles.welcome}>Ko garšīgu šodien? 😋</Text>
+            <Text style={styles.muted}>Restorānu cenas bez BaitMe uzcenojuma</Text>
+            <TextInput
+              accessibilityLabel="Meklēt restorānus"
+              value={search}
+              onChangeText={setSearch}
+              placeholder="🔎  Meklēt restorānus vai virtuvi"
+              placeholderTextColor="#92909D"
+              style={styles.search}
+            />
+          </View>
+          <ScrollView contentContainerStyle={styles.scrollBody}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filters}>
+              {categories.map((name) => (
+                <Pressable key={name} accessibilityRole="button" onPress={() => setCategory(name)}
+                  style={[styles.chip, category === name && styles.chipActive]}>
+                  <Text style={[styles.chipText, category === name && styles.chipTextActive]}>{name}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <View style={styles.valueBanner}>
+              <Text style={styles.bannerTitle}>0% BaitMe komisija 🎉</Text>
+              <Text style={styles.bannerText}>Maksā par ēdienu un piegādi. Bez servisa maksas.</Text>
+            </View>
+            <Text style={styles.sectionTitle}>Restorāni tev</Text>
+            <Text style={styles.demoNote}>Šobrīd redzami tikai paraugdati.</Text>
+            {filtered.length === 0 && <Text style={styles.muted}>Nekas netika atrasts.</Text>}
+            {filtered.map((r) => (
+              <Pressable accessibilityRole="button" accessibilityLabel={'Atvērt ' + r.name}
+                key={r.id} onPress={() => setSelectedRestaurant(r)} style={styles.restaurantCard}>
+                <View style={[styles.restaurantArt, { backgroundColor: r.accent }]}>
+                  <Text style={styles.restaurantEmoji}>{r.emoji}</Text>
+                </View>
+                <View style={styles.restaurantDetails}>
+                  <Text style={styles.restaurantTitle}>{r.name}</Text>
+                  <Text style={styles.muted} numberOfLines={1}>{r.tagline}</Text>
+                  <View style={styles.metaRow}>
+                    <SmallTag>{'★ ' + r.rating}</SmallTag>
+                    <SmallTag>{r.eta}</SmallTag>
+                    <SmallTag>{formatEuro(r.deliveryCents) + ' piegāde'}</SmallTag>
+                  </View>
+                </View>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </>
+      )}
+      {!showCart && count > 0 && (
+        <Pressable accessibilityRole="button" onPress={() => setShowCart(true)} style={styles.cartBar}>
+          <View style={styles.cartBubble}><Text style={styles.cartBubbleText}>{count}</Text></View>
+          <Text style={styles.cartBarText}>Skatīt grozu</Text>
+          <Text style={styles.cartBarText}>{formatEuro(breakdown.totalCents)}  →</Text>
+        </Pressable>
+      )}
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#F8F8FC' },
+  scrollBody: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 130 },
+  homeHeader: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18 },
+  brand: { color: INK, fontSize: 31, fontWeight: '900', letterSpacing: -1.8, marginBottom: 19 },
+  brandAccent: { color: PURPLE },
+  overline: { color: PURPLE, fontSize: 10, fontWeight: '800', letterSpacing: 1.5, marginBottom: 5 },
+  location: { fontSize: 14, fontWeight: '700', color: INK, marginBottom: 22 },
+  welcome: { fontSize: 25, fontWeight: '900', color: INK, marginBottom: 5 },
+  muted: { color: '#777482', fontSize: 13, lineHeight: 19 },
+  search: { backgroundColor: '#F2F1F7', borderRadius: 16, marginTop: 20, paddingHorizontal: 15, height: 50, fontSize: 14, color: INK },
+  filters: { marginBottom: 17, marginTop: 2 },
+  chip: { paddingHorizontal: 19, paddingVertical: 11, marginRight: 9, borderRadius: 30, backgroundColor: '#ECEBF2' },
+  chipActive: { backgroundColor: PURPLE },
+  chipText: { color: INK, fontSize: 13, fontWeight: '700' },
+  chipTextActive: { color: '#FFFFFF' },
+  valueBanner: { backgroundColor: '#EDE9FF', borderRadius: 18, padding: 19, marginBottom: 23 },
+  bannerTitle: { color: '#4630B2', fontSize: 17, fontWeight: '900', marginBottom: 5 },
+  bannerText: { color: '#5E548A', fontSize: 13 },
+  sectionTitle: { color: INK, fontSize: 20, fontWeight: '900', marginTop: 6, marginBottom: 12 },
+  demoNote: { color: '#94919D', fontSize: 11, marginBottom: 10 },
+  restaurantCard: { backgroundColor: 'white', borderRadius: 18, overflow: 'hidden', marginBottom: 16, borderWidth: 1, borderColor: '#ECEBF0' },
+  restaurantArt: { height: 105, alignItems: 'center', justifyContent: 'center' },
+  restaurantEmoji: { fontSize: 55 },
+  restaurantDetails: { padding: 15, gap: 5 },
+  restaurantTitle: { color: INK, fontSize: 18, fontWeight: '800' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 8, marginBottom: 3 },
+  tag: { backgroundColor: '#F0EFF6', paddingVertical: 6, paddingHorizontal: 10, borderRadius: 9 },
+  tagText: { color: '#514F5E', fontWeight: '700', fontSize: 11 },
+  topBar: { backgroundColor: 'white', paddingHorizontal: 20, paddingVertical: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  back: { color: PURPLE, fontSize: 15, fontWeight: '800' },
+  navTitle: { color: INK, fontSize: 17, fontWeight: '900' },
+  hero: { height: 172, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginBottom: 21 },
+  heroEmoji: { fontSize: 85 },
+  pageTitle: { color: INK, fontSize: 26, fontWeight: '900', marginBottom: 9 },
+  menuCard: { backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EDEBF2', borderRadius: 16, padding: 17, marginBottom: 12, flexDirection: 'row', gap: 10 },
+  menuName: { color: INK, fontSize: 15, fontWeight: '800', marginBottom: 5 },
+  menuPrice: { color: INK, fontSize: 16, fontWeight: '900', marginTop: 10 },
+  menuRight: { alignItems: 'center', justifyContent: 'space-between' },
+  menuEmoji: { fontSize: 38 },
+  addButton: { backgroundColor: PURPLE, borderRadius: 99, height: 32, width: 32, alignItems: 'center', justifyContent: 'center' },
+  addButtonText: { color: '#FFF', fontSize: 25, lineHeight: 30, fontWeight: '600' },
+  cartBar: { backgroundColor: PURPLE, marginHorizontal: 14, marginBottom: 12, padding: 13, borderRadius: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  cartBarText: { color: '#FFF', fontSize: 15, fontWeight: '800' },
+  cartBubble: { backgroundColor: '#FFF', height: 30, width: 30, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  cartBubbleText: { color: PURPLE, fontWeight: '900' },
+  cartLine: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', padding: 15, borderRadius: 13, marginBottom: 9 },
+  qtyButton: { backgroundColor: '#EEEAFD', height: 32, width: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
+  qtyText: { color: PURPLE, fontSize: 22, fontWeight: '700' },
+  qtyNumber: { width: 34, textAlign: 'center', color: INK, fontWeight: '800' },
+  summary: { backgroundColor: '#FFF', padding: 18, borderRadius: 16, marginTop: 13, marginBottom: 15, gap: 16 },
+  amountRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  totalRow: { paddingTop: 16, borderTopWidth: 1, borderTopColor: '#ECEBF2' },
+  totalText: { fontSize: 19, fontWeight: '900', color: INK },
+  info: { fontSize: 12, lineHeight: 19, color: '#666170', paddingVertical: 12 },
+  disabledButton: { backgroundColor: '#D8D6E0', padding: 16, borderRadius: 15, alignItems: 'center', marginTop: 12 },
+  disabledText: { color: '#635E70', fontWeight: '800', fontSize: 14 },
+  roundedButton: { backgroundColor: PURPLE, padding: 16, alignItems: 'center', borderRadius: 15, marginTop: 10 },
+  roundedButtonText: { color: '#FFF', fontWeight: '800' },
+  lightButton: { backgroundColor: '#EEEAFD' },
+  lightButtonText: { color: PURPLE },
+});

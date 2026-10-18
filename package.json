@@ -1,0 +1,19 @@
+{
+  "name": "baitme",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/customer"
+  ],
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "customer": "npm run start --workspace @baitme/customer",
+    "customer:android": "npm run android --workspace @baitme/customer",
+    "customer:ios": "npm run ios --workspace @baitme/customer",
+    "customer:web": "npm run web --workspace @baitme/customer",
+    "test": "node --test tests/*.test.cjs",
+    "typecheck": "npm run typecheck --workspace @baitme/customer"
+  }
+}
