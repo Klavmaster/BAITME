@@ -66,3 +66,5 @@ jobs:
         run: psql -v ON_ERROR_STOP=1 -f supabase/migrations/202610180004_complaints_tracking.sql
       - name: End-to-end domain/authorization/ledger assertions
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/order-lifecycle.sql
+      - name: Complaint and courier GPS integration checks
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/complaints-tracking.sql
