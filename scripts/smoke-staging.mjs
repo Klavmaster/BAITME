@@ -59,6 +59,8 @@ async function check(){
  const home=await get(web+'/');
  assert.equal(home.status,200,'Business website must return HTTP 200');
  assert.match(home.text,/baitme|bait.{0,30}me/i,'Business website should render BaitMe');
+ assert.match(home.text,/BaitMe Business\s*\|\s*Restorānu pārvaldība/i,
+  'Staging must serve the new BaitMe Business layout, not the legacy dashboard');
  return {catalogSize:catalogBody.restaurants.length};
 }
 

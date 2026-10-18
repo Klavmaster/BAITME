@@ -83,3 +83,20 @@ Svarīgi: neizveido nejaušus testa lietotājus tieši `auth.users` tabulā ar S
 - GitHub Actions \`database-integration\`: pārbauda 6. migrāciju, kategoriju augšup/lejup secību, restorānu lomu izolāciju, attāluma zonu pārklāšanās aizliegumu un atteiktus radius pasūtījumus bez verificētas adreses.
 - \`build-and-test\`: React Native TypeScript, API un Next.js biznesa panelis.
 - \`staging-smoke\`: reāls HTTPS API, datubāzes un web pieejamības tests pēc izvietošanas.
+
+## BaitMe Business — jaunā navigācija (Wolt Business iedvesmota, oriģināls BaitMe)
+
+2026-10-18 jaunā testēšanas saskarne `apps/business-web`:
+
+- **Tumša kreisā navigācija:** Sākums, Pasūtījumi, Biznesa analītika, Finanšu pārskati, Ēdienkarte, Piegādes zonas, Sūdzības un atmaksas, Restorāna dati.
+- **Lokāciju pārslēdzējs:** izmanto tikai API lietotājam piesaistītos restorānus. Pārslēgšana pārlādē izvēlētās lokācijas pasūtījumus, ēdienkarti, zonas un pārskatus.
+- **Sākumlapa:** reāli pasūtījumu rādītāji, lokāciju statuss, nesenākie pasūtījumi, 7 dienu pārdošanas mini-grafiks. Grafiks izmanto līdz 100 ielādētiem ierakstiem un **nav grāmatvedības pārskats**.
+- **Pasūtījumu tabula:** filtri, lokāla meklēšana, CSV eksports tikai no ielādētajiem datiem, esošās statusu darbības.
+- **Ēdienkartes redaktors:** saglabātas, pārkārtojamas kategorijas un ēdiena izveides dialoglogs ar nosaukumu, aprakstu, kategoriju un cenu.
+- **Piegādes zonas:** saglabāts katra restorāna individuālais rādiusu un cenu redaktors; bez uzticamas klienta adreses pārbaudes radius pasūtīšana paliek bloķēta.
+- **Finanšu skats:** tikai provizoriskā uzskaite — maksājumi Stripe nav palaisti.
+- Produktu attēlu augšupielāde, darbalaiki, personāla lomu redaktors un vēsturiskie finanšu eksporti vēl jāizstrādā; saskarnē nav izdomātu datu vai nepatiesu statistiku.
+
+Atvērt: https://baitme-business-web-staging.up.railway.app/ .
+
+**Pārbaudes:** GitHub `BaitMe checks` pārbauda TypeScript, Next.js būvi un DB; `BaitMe staging smoke` apstiprina, ka HTTPS lapa izvieto tieši jauno Business versiju, un pārbauda Supabase/API.
