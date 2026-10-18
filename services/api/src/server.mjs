@@ -304,6 +304,120 @@ app.post("/v1/courier/jobs/:orderId/status",requireUser,wrap(async(req,res)=>{
   if(error)return controlledError(res,error);
   res.json({orderId:data});
 }));
+// Complaints are private to the customer, restaurant staff or platform operator.
+app.get("/v1/orders/:id/complaint",requireUser,wrap(async(req,res)=>{
+ if(!uuid(req.params.id))return fail(res,400,"Nederīgs pasūtījuma ID");
+ const {data:order,error:oerr}=await db().from("orders")
+  .select("id,customer_id").eq("id",req.params.id).maybeSingle();
+ if(oerr)return controlledError(res,oerr);
+ if(!order||order.customer_id!==req.user.id)return fail(res,404,"Pasūtījums nav atrasts");
+ const {data,error}=await db().from("complaint_cases")
+  .select("id,order_id,category,customer_description,requested_refund_cents,status,restaurant_response,restaurant_recommended_cents,review_note,approved_refund_cents,refund_submitted_at,created_at,updated_at")
+  .eq("order_id",order.id).maybeSingle();
+ if(error)return controlledError(res,error);
+ res.json({complaint:data});
+}));
+app.post("/v1/orders/:id/complaint",requireUser,wrap(async(req,res)=>{
+ const id=req.params.id;
+ const {category,description,requestedRefundCents}=req.body||{};
+ if(!uuid(id)||!["missing_item","wrong_item","quality","delivery_issue","other"].includes(category)||
+ typeof description!=="string"||description.trim().length<15||description.length>2000||
+ !Number.isSafeInteger(requestedRefundCents)||requestedRefundCents<=0)
+  return fail(res,400,"Nederīgi sūdzības dati");
+ const {data,error}=await db().rpc("create_baitme_complaint",{
+  p_customer_id:req.user.id,p_order_id:id,p_category:category,
+  p_description:description.trim(),p_amount_cents:requestedRefundCents
+ });
+ if(error?.code==="23505")return fail(res,409,"Šim pasūtījumam jau ir sūdzība");
+ if(error)return controlledError(res,error);
+ res.status(201).json({complaintId:data,status:"awaiting_restaurant"});
+}));
+app.get("/v1/restaurant/:restaurantId/complaints",requireUser,wrap(async(req,res)=>{
+ const id=req.params.restaurantId;
+ if(!uuid(id))return fail(res,400,"Nederīgs restorāna ID");
+ if(!await hasRestaurantRole(req.user.id,id))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().from("complaint_cases")
+ .select("id,order_id,category,customer_description,requested_refund_cents,status,restaurant_response,restaurant_recommended_cents,review_note,approved_refund_cents,created_at,updated_at")
+ .eq("restaurant_id",id).order("created_at",{ascending:false}).limit(100);
+ if(error)return controlledError(res,error);
+ res.json({complaints:data});
+}));
+app.post("/v1/restaurant/:restaurantId/complaints/:id/respond",requireUser,wrap(async(req,res)=>{
+ const rid=req.params.restaurantId,id=req.params.id;
+ const {response,recommendedRefundCents}=req.body||{};
+ if(!uuid(rid)||!uuid(id)||typeof response!=="string"||
+ response.trim().length<10||response.length>2000||
+ !Number.isSafeInteger(recommendedRefundCents)||recommendedRefundCents<0)
+ return fail(res,400,"Nederīga atbilde");
+ if(!await hasRestaurantRole(req.user.id,rid,['owner','manager']))return fail(res,403,"Nav piekļuves");
+ const {data,error}=await db().rpc("respond_baitme_complaint",{
+  p_actor_id:req.user.id,p_restaurant_id:rid,p_case_id:id,
+  p_response:response.trim(),p_recommended_cents:recommendedRefundCents
+ });
+ if(error)return controlledError(res,error);
+ res.json({complaintId:data,status:"under_review"});
+}));
+app.get("/v1/admin/complaints",requireUser,requirePlatformAdmin,wrap(async(req,res)=>{
+ const {data,error}=await db().from("complaint_cases")
+ .select("id,order_id,restaurant_id,category,customer_description,requested_refund_cents,status,restaurant_response,restaurant_recommended_cents,review_note,approved_refund_cents,created_at")
+ .in("status",["awaiting_restaurant","under_review","approved_pending_refund","refund_failed"])
+ .order("created_at",{ascending:false}).limit(100);
+ if(error)return controlledError(res,error);
+ res.json({complaints:data});
+}));
+app.post("/v1/admin/complaints/:id/review",requireUser,requirePlatformAdmin,wrap(async(req,res)=>{
+ const {approve,approvedRefundCents,note}=req.body||{};
+ if(!uuid(req.params.id)||typeof approve!=="boolean"||typeof note!=="string"||
+  note.trim().length<10||note.length>2000||
+  (approve&&(!Number.isSafeInteger(approvedRefundCents)||approvedRefundCents<=0)))
+  return fail(res,400,"Nederīgi lēmuma dati");
+ const {data,error}=await db().rpc("review_baitme_complaint",{
+  p_admin_id:req.user.id,p_case_id:req.params.id,p_approve:approve,
+  p_amount_cents:approve?approvedRefundCents:null,p_note:note.trim()
+ });
+ if(error)return controlledError(res,error);
+ res.json({complaintId:data,status:approve?"approved_pending_refund":"rejected",
+  message:approve?"Lēmums saglabāts. Stripe atmaksa NAV nosūtīta.":"Sūdzība noraidīta."});
+}));
+// GPS disclosure is opt-in, to be started by courier only on an assigned job.
+// No background location collection. A location is never publicly searchable.
+app.post("/v1/courier/jobs/:orderId/location",requireUser,wrap(async(req,res)=>{
+ if(!uuid(req.params.orderId))return fail(res,400,"Nederīgs pasūtījums");
+ if(!await hasCourierRole(req.user.id))return fail(res,403,"Nav kurjera piekļuves");
+ const {latitude,longitude,accuracyM}=req.body||{};
+ if(![latitude,longitude,accuracyM].every(Number.isFinite)||
+ latitude< -90||latitude>90||longitude< -180||longitude>180||
+ accuracyM<0||accuracyM>1000)return fail(res,400,"Nederīga atrašanās vieta");
+ const {error}=await db().rpc("upsert_baitme_courier_location",{
+  p_courier:req.user.id,p_order:req.params.orderId,p_lat:latitude,p_lng:longitude,p_accuracy:accuracyM
+ });
+ if(error)return controlledError(res,error);
+ res.json({shared:true});
+}));
+app.delete("/v1/courier/jobs/:orderId/location",requireUser,wrap(async(req,res)=>{
+ if(!uuid(req.params.orderId))return fail(res,400,"Nederīgs pasūtījums");
+ const {error}=await db().rpc("stop_baitme_courier_location",{
+  p_courier:req.user.id,p_order:req.params.orderId
+ });
+ if(error)return controlledError(res,error);
+ res.json({shared:false});
+}));
+app.get("/v1/orders/:id/courier-location",requireUser,wrap(async(req,res)=>{
+ if(!uuid(req.params.id))return fail(res,400,"Nederīgs pasūtījums");
+ const {data:order,error:oerr}=await db().from("orders").select("customer_id,courier_id,payment_status,status")
+ .eq("id",req.params.id).maybeSingle();
+ if(oerr)return controlledError(res,oerr);
+ if(!order||order.customer_id!==req.user.id)return fail(res,404,"Pasūtījums nav atrasts");
+ if(order.payment_status!=="paid"||!["ready_for_pickup","picked_up"].includes(order.status)||!order.courier_id)
+ return res.json({location:null});
+ const {data,error}=await db().from("courier_live_locations")
+ .select("latitude,longitude,accuracy_m,updated_at,courier_id")
+ .eq("order_id",req.params.id).eq("courier_id",order.courier_id)
+ .gte("updated_at",new Date(Date.now()-60000).toISOString()).maybeSingle();
+ if(error)return controlledError(res,error);
+ return res.json({location:data?{latitude:data.latitude,longitude:data.longitude,
+  accuracyM:data.accuracy_m,updatedAt:data.updated_at}:null});
+}));
 app.post("/v1/orders/:id/checkout",requireUser,(_req,res)=>fail(res,503,
   "Reāli maksājumi nav aktivizēti: jāpārbauda Stripe Connect, juridiskā atbilstība un atmaksa."
 ));
