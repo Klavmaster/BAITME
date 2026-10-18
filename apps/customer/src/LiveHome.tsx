@@ -7,12 +7,13 @@ import {createClient,type Session} from '@supabase/supabase-js';
 
 type Restaurant={id:string;name:string;description:string;category:string;image_url:string|null;delivery_eta_min:number;delivery_eta_max:number};
 type Item={id:string;name:string;description:string;price_cents:number;category:string};
-type Zone={id:string;name:string;postal_code_prefix:string;delivery_cents:number};
+type Zone={id:string;name:string;zone_type:"postal_prefix"|"radius";postal_code_prefix:string|null;min_distance_m:number|null;max_distance_m:number|null;delivery_cents:number};
+type Category={id:string;name:string;sort_order:number};
 type Order={id:string;status:string;payment_status:string;total_cents:number;food_cents:number;created_at:string};
 type Complaint={id:string;status:string;category:string;customer_description:string;requested_refund_cents:number;
  restaurant_response:string|null;restaurant_recommended_cents:number|null;review_note:string|null;approved_refund_cents:number|null;};
 type LocationSample={latitude:number;longitude:number;accuracyM:number;updatedAt:string};
-type MenuResponse={restaurant:Restaurant;items:Item[];deliveryZones:Zone[]};
+type MenuResponse={restaurant:Restaurant;items:Item[];deliveryZones:Zone[];categories:Category[]};
 
 const V='#694EEB',INK='#242032';
 const apiUrl=(process.env.EXPO_PUBLIC_API_URL||'').replace(/\/$/,'');
@@ -51,6 +52,7 @@ export default function LiveHome(){
  const [restaurants,setRestaurants]=useState<Restaurant[]>([]);
  const [restaurant,setRestaurant]=useState<Restaurant|null>(null);
  const [items,setItems]=useState<Item[]>([]),[zones,setZones]=useState<Zone[]>([]);
+ const [categories,setCategories]=useState<Category[]>([]);
  const [zoneId,setZoneId]=useState(''),[basket,setBasket]=useState<Record<string,number>>({});
  const [view,setView]=useState<'home'|'menu'|'cart'|'login'|'orders'|'complaint'>('home');
  const [search,setSearch]=useState(''),[address,setAddress]=useState(''),[postal,setPostal]=useState('');
@@ -81,7 +83,9 @@ export default function LiveHome(){
   await guard(async()=>{
    const result=await request<MenuResponse>('/v1/restaurants/'+r.id+'/menu');
    setRestaurant(result.restaurant);setItems(result.items);setZones(result.deliveryZones);
-   setZoneId(result.deliveryZones[0]?.id||'');setBasket({});setView('menu');
+   setCategories(result.categories||[]);
+   setZoneId(result.deliveryZones.find(z=>z.zone_type==="postal_prefix")?.id||'');
+   setBasket({});setView('menu');
   });
  }
  const selectedZone=zones.find(z=>z.id===zoneId);
@@ -120,6 +124,8 @@ export default function LiveHome(){
    const token=(await supabase.auth.getSession()).data.session?.access_token;
    if(!token){setView('login');return;}
    if(!restaurant||!selectedZone||!count)throw Error('Izvēlies restorānu un ēdienu');
+   if(selectedZone.zone_type!=="postal_prefix")
+    throw Error('Attāluma zonai vajadzīga servera pārbaudīta adrese — testa pasūtījumi šajā zonā vēl nav pieejami');
    const normalized=postal.trim().toUpperCase();
    if(!/^LV-[0-9]{4}$/.test(normalized)||address.trim().length<8)
     throw Error('Ievadi adresi un pasta indeksu LV-1234');
@@ -213,7 +219,10 @@ export default function LiveHome(){
     <Text style={styles.title}>{restaurant?.name}</Text>
     <Text style={styles.muted}>{restaurant?.description}</Text>
     <Text style={styles.subtitle}>Ēdienkarte</Text>
-    {items.map(i=><View key={i.id} style={styles.menuRow}>
+    {items.map((i,index)=><View key={i.id}>
+      {(index===0||items[index-1].category!==i.category)&&
+       <Text style={styles.subtitle}>{i.category}</Text>}
+      <View style={styles.menuRow}>
      <View style={{flex:1,gap:5}}>
       <Text style={styles.cardTitle}>{i.name}</Text>
       <Text style={styles.muted}>{i.description}</Text>
@@ -221,6 +230,7 @@ export default function LiveHome(){
      </View>
      <Pressable accessibilityRole="button" accessibilityLabel={'Pievienot '+i.name}
       onPress={()=>change(i.id,1)} style={styles.add}><Text style={styles.addText}>+</Text></Pressable>
+      </View>
     </View>)}
     <Button onPress={()=>setView('home')} secondary>Atpakaļ uz restorāniem</Button>
    </>}
@@ -237,11 +247,16 @@ export default function LiveHome(){
     <Text style={styles.subtitle}>Piegādes adrese</Text>
     <TextInput placeholder="Iela, mājas un dzīvokļa numurs" style={styles.input} value={address} onChangeText={setAddress}/>
     <TextInput placeholder="LV-1234" style={styles.input} value={postal} onChangeText={setPostal} autoCapitalize="characters"/>
-    <Text style={styles.muted}>Izvēlies restorāna piegādes zonu. Pasta indeksam ar to jāsakrīt.</Text>
-    {zones.map(z=><Pressable key={z.id} onPress={()=>setZoneId(z.id)} style={[styles.zone,zoneId===z.id&&styles.zoneSelected]}>
+    <Text style={styles.muted}>Piegādes zonas nosaka katrs restorāns no savas atrašanās vietas. Attāluma zonām pirms pasūtīšanas nepieciešama pārbaudīta piegādes adrese.</Text>
+    {zones.map(z=><Pressable key={z.id} disabled={z.zone_type==="radius"}
+     onPress={()=>setZoneId(z.id)} style={[styles.zone,zoneId===z.id&&styles.zoneSelected]}>
       <Text style={styles.cardTitle}>{zoneId===z.id?'◉':'○'} {z.name}</Text>
-      <Text style={styles.muted}>{z.postal_code_prefix} · {money(z.delivery_cents)}</Text>
+      <Text style={styles.muted}>{z.zone_type==="radius"
+       ?(z.min_distance_m!/1000)+"–"+(z.max_distance_m!/1000)+" km no restorāna · "+money(z.delivery_cents)+" · pagaidām nav pasūtāma"
+       :z.postal_code_prefix+" · "+money(z.delivery_cents)}</Text>
     </Pressable>)}
+    {!zones.some(z=>z.zone_type==="postal_prefix")&&zones.some(z=>z.zone_type==="radius")&&
+     <Text style={styles.warning}>Restorāns ir izveidojis piegādes attāluma zonas. Automātiska adreses pārbaude vēl nav pieslēgta, tāpēc šobrīd tās var apskatīt, bet pasūtījumu izveidot nevar.</Text>}
     <View style={styles.bill}>
      <View style={styles.billRow}><Text>Ēdiens</Text><Text>{money(foodCents)}</Text></View>
      <View style={styles.billRow}><Text>Piegāde</Text><Text>{money(deliveryCents)}</Text></View>
