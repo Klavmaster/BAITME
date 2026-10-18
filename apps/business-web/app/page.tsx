@@ -1,12 +1,14 @@
 "use client";
-import {useEffect,useState} from "react";
+import {useEffect,useMemo,useState} from "react";
+import {BusinessSidebar,BusinessHeader,VenueSwitcher,BizIcon,viewText,type BusinessView} from "./business-chrome";
+import "./business.css";
 import {createClient,type SupabaseClient,type Session} from "@supabase/supabase-js";
 type Restaurant={id:string;name:string;role:string;published:boolean;slug:string};
 type Menu={id:string;name:string;description:string;category:string;price_cents:number;available:boolean};
 type Category={id:string;name:string;sort_order:number};
 type Zone={id:string;name:string;zone_type:"postal_prefix"|"radius";postal_code_prefix:string|null;min_distance_m:number|null;max_distance_m:number|null;delivery_cents:number;active:boolean};
 type Location={pickup_address:string|null;latitude:number|null;longitude:number|null};
-type Order={id:string;status:string;payment_status:string;food_cents:number;restaurant_processing_fee_cents:number;platform_fee_cents:number;delivery_cents:number;total_cents:number;address_line:string;postal_code:string;order_items:{name:string;quantity:number}[]};
+type Order={id:string;created_at:string;status:string;payment_status:string;food_cents:number;restaurant_processing_fee_cents:number;platform_fee_cents:number;delivery_cents:number;total_cents:number;address_line:string;postal_code:string;order_items:{name:string;quantity:number}[]};
 type Summary={totalOrders:number;paidOrders:number;foodCents:number;processorCents:number;baitmePlatformFeeCents:number;netRestaurantCents:number;pendingOrders:number};
 type Complaint={id:string;order_id:string;category:string;customer_description:string;
  requested_refund_cents:number;status:string;restaurant_response:string|null;
@@ -19,6 +21,15 @@ const money=(c:number)=>(c/100).toFixed(2).replace(".",",")+" €";
 const flow:Record<string,string>={placed:"accepted",accepted:"preparing",preparing:"ready_for_pickup"};
 const actionLabel:Record<string,string>={accepted:"Pieņemt",preparing:"Gatavošanā",ready_for_pickup:"Gatavs"};
 function safeError(e:unknown){return e instanceof Error?e.message:"Nezināma kļūda";}
+
+function statusText(v:string):string{
+ return ({awaiting_payment:"Gaida apmaksu",placed:"Jauns",accepted:"Pieņemts",preparing:"Gatavošanā",
+  ready_for_pickup:"Gatavs",picked_up:"Ceļā",delivered:"Piegādāts",cancelled:"Atcelts"} as Record<string,string>)[v]||v;
+}
+function statusTone(v:string):string{
+ return ["delivered"].includes(v)?"is-success":v==="cancelled"?"is-danger":
+  ["placed","accepted","preparing","ready_for_pickup","picked_up"].includes(v)?"is-warning":"is-neutral";
+}
 export default function Page(){
  const [client]=useState<SupabaseClient|null>(()=>configured?createClient(URL,KEY):null);
  const [session,setSession]=useState<Session|null>(null);
@@ -26,7 +37,19 @@ export default function Page(){
  const [email,setEmail]=useState(""),[password,setPassword]=useState("");
  const [error,setError]=useState("");
  const [restaurants,setRestaurants]=useState<Restaurant[]>([]),[rid,setRid]=useState("");
- const [tab,setTab]=useState<"orders"|"menu"|"zones"|"complaints">("orders");
+ const [tab,setTab]=useState<BusinessView>("home");
+ const [venueDialog,setVenueDialog]=useState(false),[mobileNav,setMobileNav]=useState(false);
+ const [orderFilter,setOrderFilter]=useState<"all"|"active"|"delivered"|"cancelled">("all");
+ const [orderSearch,setOrderSearch]=useState("");
+ const [dateRange,setDateRange]=useState<"today"|"yesterday"|"week">("week");
+ const [addItemOpen,setAddItemOpen]=useState(false),[itemDescription,setItemDescription]=useState("");
+ useEffect(()=>{
+  const sync=()=>{const hash=window.location.hash.slice(1);if(hash in viewText)setTab(hash as BusinessView);};
+  sync();window.addEventListener("hashchange",sync);return ()=>window.removeEventListener("hashchange",sync);
+ },[]);
+ function navigate(v:BusinessView){
+  setTab(v);window.history.replaceState(null,"",window.location.pathname+window.location.search+"#"+v);
+ }
  const [orders,setOrders]=useState<Order[]>([]);
  const [complaints,setComplaints]=useState<Complaint[]>([]);
  const [responses,setResponses]=useState<Record<string,string>>({});
@@ -91,6 +114,55 @@ export default function Page(){
   return ()=>{valid=false;};
  },[session?.user.id]);
  const current=restaurants.find(r=>r.id===rid);
+ const paidOrders=useMemo(()=>orders.filter(o=>["paid","partially_refunded"].includes(o.payment_status)),[orders]);
+ const filteredOrders=useMemo(()=>orders.filter(o=>{
+  const active=["placed","accepted","preparing","ready_for_pickup","picked_up"].includes(o.status);
+  const matches=orderFilter==="all"||
+   (orderFilter==="active"&&active)||(orderFilter==="delivered"&&o.status==="delivered")||
+   (orderFilter==="cancelled"&&o.status==="cancelled");
+  const q=orderSearch.trim().toLocaleLowerCase("lv");
+  return matches&&(!q||(o.id+" "+o.order_items?.map(i=>i.name).join(" ")).toLocaleLowerCase("lv").includes(q));
+ }),[orders,orderFilter,orderSearch]);
+ const salesDays=useMemo(()=>{
+  const key=(date:Date)=>date.toLocaleDateString("sv-SE",{timeZone:"Europe/Riga"});
+  const today=new Date();
+  return Array.from({length:7},(_,i)=>{
+   const day=new Date(today.getTime()-(6-i)*86400000),dateKey=key(day);
+   const cents=paidOrders.filter(o=>key(new Date(o.created_at))===dateKey).reduce((n,o)=>n+o.food_cents,0);
+   return {key:dateKey,label:day.toLocaleDateString("lv-LV",{timeZone:"Europe/Riga",month:"short",day:"numeric"}),cents};
+  });
+ },[paidOrders]);
+ const periodSales=useMemo(()=>{
+  const days=dateRange==="today"?salesDays.slice(-1):dateRange==="yesterday"?salesDays.slice(-2,-1):salesDays;
+  return days.reduce((sum,d)=>sum+d.cents,0);
+ },[dateRange,salesDays]);
+ const chartMax=Math.max(...salesDays.map(d=>d.cents),100);
+ const activeCount=orders.filter(o=>["placed","accepted","preparing","ready_for_pickup","picked_up"].includes(o.status)).length;
+ const deliveredCount=orders.filter(o=>o.status==="delivered").length;
+ const complaintOpen=complaints.filter(c=>!["rejected","refunded","refund_submitted"].includes(c.status)).length;
+ async function selectVenue(id:string){
+  if(id===rid)return;
+  await call(async()=>{await loadRestaurant(id);setRid(id);});
+ }
+ function exportOrders(){
+  // CSV contains only the loaded rows (API limit 100), never unbounded exports.
+  // Formula-like cell values are neutralized to prevent spreadsheet injection.
+  const safe=(v:unknown)=>{
+   const value=String(v??"");
+   const neutral=/^\s*[=+@-]/.test(value)?"'"+value:value;
+   return '"'+neutral.replaceAll('"','""')+'"';
+  };
+  const rows=[
+   ["ID","Datums","Statuss","Maksājums","Ēdiens EUR","Piegāde EUR","BaitMe EUR","Kopā EUR"],
+   ...filteredOrders.map(o=>[o.id,o.created_at,o.status,o.payment_status,
+    (o.food_cents/100).toFixed(2),(o.delivery_cents/100).toFixed(2),
+    (o.platform_fee_cents/100).toFixed(2),(o.total_cents/100).toFixed(2)])
+  ];
+  const blob=new Blob(["\uFEFF"+rows.map(row=>row.map(safe).join(",")).join("\r\n")],{type:"text/csv;charset=utf-8"});
+  const link=window.URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=link;a.download="baitme-pasutijumi-"+(current?.slug||"restorans")+".csv";
+  document.body.appendChild(a);a.click();a.remove();window.URL.revokeObjectURL(link);
+ }
  async function login(){
   if(!client)return;
   await call(async()=>{
@@ -104,9 +176,9 @@ export default function Page(){
    const cents=Math.round(Number(itemPrice.replace(",","."))*100);
    if(!Number.isFinite(cents)||cents<0)throw new Error("Nepareiza cena");
    await api("/v1/restaurant/"+rid+"/menu",{method:"POST",body:JSON.stringify({
-    name:itemName,description:"",category:itemCategory,priceCents:cents
+    name:itemName,description:itemDescription,category:itemCategory,priceCents:cents
    })});
-   setItemName("");setItemPrice("");await loadRestaurant(rid);
+   setItemName("");setItemPrice("");setItemDescription("");setAddItemOpen(false);await loadRestaurant(rid);
   });
  }
  async function addCategory(e:React.FormEvent){
@@ -165,59 +237,173 @@ export default function Page(){
       !Number.isSafeInteger(minDistanceM)||!Number.isSafeInteger(maxDistanceM)||
       minDistanceM<0||maxDistanceM<=minDistanceM)
      throw new Error("Norādi derīgu piegādes cenu un intervālu kilometros");
-   await api("/v1/restaurant/"+rid+"/zones",{method:"POST",body:JSON.stringify({
-    name:zoneName,minDistanceM,maxDistanceM,deliveryCents:cents
-   })});
-   setZoneName("");setZoneMinKm(zoneMaxKm);setZoneMaxKm(String(maxKm+3));
-   await loadRestaurant(rid);
-  });
- }
- if(!configured)return <main><h1>BaitMe biznesa panelis</h1>
-  <p className="notice">Konfigurācijā nav Supabase un API publisko adrešu. Skati projekta .env.example.</p></main>;
- if(!ready)return <main><h1>BaitMe</h1><p>Savienojam kontu…</p></main>;
- return <main>
-  <header className="top"><div className="brand">bait<span>me.</span><div className="eyebrow">Restorāna vadības panelis</div></div>
-   <div className="cardActions"><a className="secondary" href="/apply">Pieteikties</a><a className="secondary" href="/admin">Operators</a>
-    {session&&<button className="secondary" onClick={()=>void client?.auth.signOut()}>Iziet</button>}</div></header>
-  {!session?<section className="panel" style={{maxWidth:500,margin:"80px auto"}}>
-    <p className="eyebrow">Restorāna konts</p><h1>Laipni lūdzam atpakaļ!</h1>
-    <p className="muted">Pieslēdzies ar savu apstiprināto restorāna lietotāja kontu.</p>
-    <form onSubmit={e=>{e.preventDefault();void login();}} className="fields" style={{flexDirection:"column",alignItems:"stretch"}}>
-      <div className="field"><label>E-pasts</label><input value={email} onChange={e=>setEmail(e.target.value)} type="email" required/></div>
-      <div className="field"><label>Parole</label><input value={password} onChange={e=>setPassword(e.target.value)} type="password" required/></div>
-      <button className="primary" disabled={busy}>Ieiet</button>
-    </form>
-   </section>:<>
-    <p className="eyebrow">Biznesa pārskats</p>
-    <h1>Viss restorānam vienuviet</h1>
-    <p className="muted">Fiksēta BaitMe maksa 0,50 € par pabeigtu pasūtījumu · ēdienkarte · individuālas piegādes zonas</p>
-    {restaurants.length?<div className="fields"><div className="field" style={{maxWidth:350}}><label>Restorāns</label>
-     <select value={rid} onChange={e=>void call(async()=>{setRid(e.target.value);await loadRestaurant(e.target.value);})}>
-      {restaurants.map(r=><option key={r.id} value={r.id}>{r.name}</option>)}
-     </select></div>
-     <button className="secondary" disabled={busy||!rid} onClick={()=>void call(()=>loadRestaurant(rid))}>Atjaunot</button>
-    </div>:<p className="notice">Tavam kontam nav piešķirta piekļuve restorānam. Administrators pievieno kontu restaurant_staff tabulā.</p>}
-    {current&&<><div className="grid">
-      <div className="panel green"><p className="eyebrow">Restorāna provizoriskie ieņēmumi</p><p className="kpi">{money(summary.netRestaurantCents)}</p><p className="muted">Apmaksātā ēdiena summa {money(summary.foodCents)} − Stripe apstrāde {money(summary.processorCents)} − BaitMe 0,50 € maksa par pabeigtiem pasūtījumiem {money(summary.baitmePlatformFeeCents)}. Pirms atmaksām, nodokļu korekcijām un faktiskiem pārskaitījumiem.</p></div>
-      <div className="panel"><p className="eyebrow">Pasūtījumi</p><p className="kpi">{summary.totalOrders}</p><p className="muted">{summary.paidOrders} apmaksāti</p></div>
-      <div className="panel"><p className="eyebrow">Aktīvie pasūtījumi</p><p className="kpi">{summary.pendingOrders}</p><p className="muted">Nepabeigtās piegādes</p></div>
+   await api("/v1/restaurant/" return <div className="biz-app">
+ {!session?<main className="biz-auth-page">
+  <section className="biz-auth-card">
+   <div className="biz-auth-brand">bait<span>me.</span><small> BUSINESS</small></div>
+   <p className="biz-eyebrow">Restorānu pārvaldība</p>
+   <h1>Laipni lūdzam atpakaļ!</h1>
+   <p className="muted">Pieslēdzies BaitMe, lai pārvaldītu savus restorānus, pasūtījumus un ēdienkartes.</p>
+   <form onSubmit={e=>{e.preventDefault();void login();}} className="biz-login-fields">
+    <label>E-pasts<input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" required/></label>
+    <label>Parole<input value={password} onChange={e=>setPassword(e.target.value)} type="password" autoComplete="current-password" required/></label>
+    <button className="primary" disabled={busy}>Ieiet biznesa panelī</button>
+   </form>
+   {error&&<div className="error" role="alert">{error}</div>}
+   <p className="muted">Vēl neesi partneris? <a href="/apply">Pieteikt restorānu</a></p>
+  </section>
+ </main>:<>
+  <BusinessSidebar view={tab} onNavigate={navigate} venueName={current?.name||""}
+   email={session.user.email||""} onSwitch={()=>setVenueDialog(true)}
+   onSignOut={()=>void client?.auth.signOut()}
+   mobileOpen={mobileNav} onCloseMobile={()=>setMobileNav(false)}/>
+  <div className="biz-workspace">
+   <BusinessHeader view={tab} venueName={current?.name||""}
+    onOpenSwitcher={()=>setVenueDialog(true)} onOpenMobile={()=>setMobileNav(true)}
+    loading={busy} onRefresh={()=>{if(rid)void call(()=>loadRestaurant(rid))}}/>
+   <main className="biz-content">
+    <div className="biz-page-heading">
+     <div><p className="biz-eyebrow">BaitMe / Restorāna vadība</p><h1>{viewText[tab].title}</h1>
+      <p className="muted">{viewText[tab].subtitle}</p></div>
+     <div className="biz-heading-actions">
+      {current&&<span className={"biz-visibility "+(current.published?"is-published":"")}>
+       <span className="biz-status-dot"/>{current.published?"Publicēts":"Nav publicēts"}</span>}
+      <button className="secondary" disabled={busy||!rid} onClick={()=>{if(rid)void call(()=>loadRestaurant(rid))}}>
+       <BizIcon name="refresh" size={17}/> Atjaunot</button>
+     </div>
     </div>
-    <div className="tabs">{([["orders","Pasūtījumi"],["menu","Ēdienkarte"],["zones","Piegādes zonas"],["complaints","Sūdzības"]] as const)
-      .map(([id,label])=><button key={id} className={"tab "+(tab===id?"active":"")} onClick={()=>setTab(id)}>{label}</button>)}</div>
-    {tab==="orders"&&<section className="panel"><h2>Pasūtījumu saraksts</h2>
-     {!orders.length&&<div className="empty">Pasūtījumu vēl nav.</div>}
-     {orders.map(o=><div key={o.id} className="row"><div>
-      <strong>#{o.id.slice(0,8)}</strong> <span className="badge">{o.status}</span>
-      <small>{o.address_line}, {o.postal_code} · {o.payment_status}</small>
-      <small>{o.order_items?.map(i=>i.quantity+" × "+i.name).join(" · ")}</small>
-      <small>Ēdiens: {money(o.food_cents)} · Stripe apstrāde: {money(o.restaurant_processing_fee_cents)} · BaitMe fiksētā maksa: {money(o.platform_fee_cents)} · Piegāde: {money(o.delivery_cents)}</small>
-      </div><div className="cardActions"><strong>{money(o.total_cents)}</strong>
-      {o.payment_status==="paid"&&flow[o.status]&&<button className="primary" disabled={busy} onClick={()=>void call(async()=>{
-       await api("/v1/restaurant/"+rid+"/orders/"+o.id+"/status",{method:"POST",body:JSON.stringify({status:flow[o.status]})});
-       await loadRestaurant(rid);
-      })}>{actionLabel[flow[o.status]]}</button>}</div></div>)}
+    {error&&<div className="error" role="alert">{error}<button className="biz-dismiss" aria-label="Aizvērt kļūdu" onClick={()=>setError("")}>×</button></div>}
+    {!restaurants.length&&<section className="biz-card biz-empty-onboarding">
+      <h2>Nav piesaistītu restorānu</h2><p className="muted">Pievieno savu restorānu vai gaidi administratora apstiprinājumu.</p>
+      <a href="/apply" className="primary biz-inline-link"><BizIcon name="plus" size={16}/> Pieteikt restorānu</a>
      </section>}
-    {tab==="menu"&&<section className="panel">
+    {current&&<>{tab==="home"&&<>
+ <div className="biz-stats-row">
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Pasūtījumi kopā</span>
+   <strong>{summary.totalOrders}</strong><small>{summary.paidOrders} apmaksas statusā</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Aktīvie pasūtījumi</span>
+   <strong>{activeCount}</strong><small>Vēl nav pabeigti</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Piegādāti</span>
+   <strong>{deliveredCount}</strong><small>No pēdējiem {orders.length} pasūtījumiem</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Atvērtas sūdzības</span>
+   <strong>{complaintOpen}</strong><small>{complaints.length} ieraksti kopā</small></div>
+ </div>
+ <div className="biz-dashboard-grid">
+  <section className="biz-card biz-venue-overview">
+   <div className="biz-card-head"><div><h2>Tavas lokācijas</h2><p className="muted">Pārvaldi katru restorānu atsevišķi</p></div>
+    <button className="biz-icon-button" aria-label="Mainīt lokāciju" onClick={()=>setVenueDialog(true)}><BizIcon name="switch"/></button></div>
+   <div className="biz-overview-filters"><span className="biz-filter-selected">Visi ({restaurants.length})</span>
+    <span>Publicēti ({restaurants.filter(r=>r.published).length})</span>
+    <span>Nepublicēti ({restaurants.filter(r=>!r.published).length})</span></div>
+   <div className="biz-overview-list">
+    {restaurants.map(r=><button className="biz-overview-row" key={r.id} onClick={()=>void selectVenue(r.id)}>
+     <span className="biz-overview-avatar">{r.name.slice(0,2).toUpperCase()}</span>
+     <span className="biz-overview-name"><strong>{r.name}</strong><small>{r.slug}</small></span>
+     <span className={"biz-online-dot "+(r.published?"online":"offline")}/>
+     <span className="biz-overview-status">{r.published?"Publicēts":"Nav publicēts"}</span>
+    </button>)}
+   </div>
+   <div className="biz-card-footer"><button className="biz-link" onClick={()=>setVenueDialog(true)}>Pārslēgt lokāciju →</button></div>
+  </section>
+  <section className="biz-card biz-sales-overview">
+   <div className="biz-card-head"><div><h2>Pārdošanas pārskats</h2><p className="muted">Ēdiena summa no ielādētajiem pasūtījumiem</p></div>
+    <button className="biz-icon-button" aria-label="Atvērt analītiku" onClick={()=>navigate("insights")}><BizIcon name="external"/></button></div>
+   <div className="biz-period-control" aria-label="Periods">
+    {([["today","Šodien"],["yesterday","Vakar"],["week","7 dienas"]] as const).map(([v,label])=>
+     <button key={v} className={dateRange===v?"chosen":""} onClick={()=>setDateRange(v)}>{label}</button>)}</div>
+   <strong className="biz-sales-total">{money(periodSales)}</strong>
+   <div className="biz-bars" role="img" aria-label="Pārdošana pēdējās septiņās dienās">
+    {salesDays.map(day=><div className="biz-bar-column" key={day.key} title={day.key+": "+money(day.cents)}>
+      <span className="biz-bar-track"><span style={{height:Math.max(day.cents>0?8:2,day.cents/chartMax*100)+"%"}}/></span>
+      <small>{day.label}</small></div>)}</div>
+   <p className="biz-fineprint">Tikai ielādētie pasūtījumi (līdz 100) bez atmaksu korekcijām. Nav grāmatvedības pārskats.</p>
+  </section>
+ </div>
+ <div className="biz-dashboard-grid biz-lower-grid">
+  <section className="biz-card">
+   <div className="biz-card-head"><h2>Jaunākie pasūtījumi</h2><button className="biz-link" onClick={()=>navigate("orders")}>Visi pasūtījumi →</button></div>
+   {!orders.length?<div className="biz-empty">Pasūtījumu vēl nav. Tie parādīsies pēc klientu aktivitātes.</div>:
+    orders.slice(0,5).map(o=><div className="biz-activity-row" key={o.id}>
+     <span className="biz-activity-icon"><BizIcon name="orders" size={17}/></span>
+     <span><strong>#{o.id.slice(0,8)}</strong><small>{new Date(o.created_at).toLocaleString("lv-LV")}</small></span>
+     <span className={"biz-status-pill "+statusTone(o.status)}>{statusText(o.status)}</span>
+     <strong>{money(o.total_cents)}</strong></div>)}
+  </section>
+  <section className="biz-card">
+   <div className="biz-card-head"><h2>Ātrās darbības</h2></div>
+   <div className="biz-quick-actions">
+    <button onClick={()=>navigate("menu")}><BizIcon name="menu"/> Rediģēt ēdienkarti <span>→</span></button>
+    <button onClick={()=>navigate("zones")}><BizIcon name="zones"/> Piegādes zonas <span>→</span></button>
+    <button onClick={()=>navigate("complaints")}><BizIcon name="complaints"/> Sūdzības un atmaksas <span>→</span></button>
+    <button onClick={()=>navigate("details")}><BizIcon name="details"/> Restorāna dati <span>→</span></button>
+   </div>
+   <div className="biz-info-note">BaitMe maksa restorānam: <strong>0,50 €</strong> par pabeigtu, apmaksātu pasūtījumu. Stripe maksājumi vēl izslēgti.</div>
+  </section>
+ </div>
+ </>}{tab==="orders"&&<section className="biz-card biz-table-card">
+ <div className="biz-card-head"><div><h2>Pasūtījumu vēsture</h2><p className="muted">Pēdējie līdz 100 pasūtījumiem izvēlētajā restorānā</p></div>
+  <button className="secondary" onClick={exportOrders}><BizIcon name="reports" size={16}/> Eksportēt CSV</button></div>
+ <div className="biz-table-tools">
+  <div className="biz-filter-pills">
+   {([["all","Visi"],["active","Aktīvie"],["delivered","Piegādāti"],["cancelled","Atceltie"]] as const).map(([v,label])=>
+    <button key={v} className={orderFilter===v?"chosen":""} onClick={()=>setOrderFilter(v)}>{label}</button>)}</div>
+  <label className="biz-table-search"><BizIcon name="search" size={17}/>
+   <input placeholder="Meklēt pēc pasūtījuma vai ēdiena..." value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}/></label>
+ </div>
+ <div className="biz-table-scroll"><table className="biz-orders-table">
+  <thead><tr><th>Datums</th><th>Pasūtījums</th><th>Ēdieni</th><th>Statuss</th><th>Apmaksa</th><th>Summa</th><th>Darbība</th></tr></thead>
+  <tbody>{filteredOrders.map(o=><tr key={o.id}>
+   <td><strong>{new Date(o.created_at).toLocaleDateString("lv-LV")}</strong><small>{new Date(o.created_at).toLocaleTimeString("lv-LV",{hour:"2-digit",minute:"2-digit"})}</small></td>
+   <td className="biz-order-id">#{o.id.slice(0,8)}</td>
+   <td><span className="biz-order-items">{o.order_items?.map(i=>i.quantity+" × "+i.name).join(", ")||"—"}</span><small>{o.postal_code}</small></td>
+   <td><span className={"biz-status-pill "+statusTone(o.status)}>{statusText(o.status)}</span></td>
+   <td><span className={"biz-status-pill "+(o.payment_status==="paid"?"is-success":"is-neutral")}>{o.payment_status==="paid"?"Apmaksāts":o.payment_status==="unpaid"?"Neapmaksāts":o.payment_status}</span></td>
+   <td className="biz-order-total">{money(o.total_cents)}</td>
+   <td>{o.payment_status==="paid"&&flow[o.status]?<button className="biz-mini-action" disabled={busy} onClick={()=>void call(async()=>{
+    await api("/v1/restaurant/"+rid+"/orders/"+o.id+"/status",{method:"POST",body:JSON.stringify({status:flow[o.status]})});await loadRestaurant(rid);
+   })}>{actionLabel[flow[o.status]]}</button>:<span className="biz-muted-dash">—</span>}</td>
+  </tr>)}</tbody>
+ </table></div>
+ {!filteredOrders.length&&<div className="biz-empty">Šim filtram nav atbilstošu pasūtījumu.</div>}
+ </section>}{tab==="insights"&&<>
+ <div className="biz-stats-row">
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Ēdienu apgrozījums (apmaksāts)</span><strong>{money(summary.foodCents)}</strong><small>Izvēlētā restorāna ielādētie dati</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Apmaksātie pasūtījumi</span><strong>{summary.paidOrders}</strong><small>No pēdējiem 2000 ierakstiem</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Vidējā apmaksātā ēdiena vērtība</span><strong>{money(summary.paidOrders?Math.round(summary.foodCents/summary.paidOrders):0)}</strong><small>Bez piegādes maksas</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Piegādāti</span><strong>{deliveredCount}</strong><small>No pēdējiem {orders.length} pasūtījumiem</small></div>
+ </div>
+ <section className="biz-card"><div className="biz-card-head"><h2>7 dienu aktivitāte</h2><span className="biz-badge-neutral">Testēšanas vide</span></div>
+ <div className="biz-bars biz-bars-wide">{salesDays.map(day=><div className="biz-bar-column" key={day.key}>
+  <span className="biz-bar-track"><span style={{height:Math.max(day.cents?8:2,day.cents/chartMax*100)+"%"}}/></span>
+  <small>{day.label}</small><small>{money(day.cents)}</small></div>)}</div>
+ <p className="muted">Šis grafiks izmanto līdz 100 pēdējos pasūtījumus un ēdiena summas. Pilnvērtīgs analītikas API ar periodu atlasi un pilnu vēsturi tiks izstrādāts atsevišķi.</p></section>
+ </>}{tab==="reports"&&<>
+ <div className="biz-stats-row">
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Apmaksātais ēdiens</span><strong>{money(summary.foodCents)}</strong><small>No ielādētajiem ierakstiem</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Stripe apstrāde</span><strong>{money(summary.processorCents)}</strong><small>Provizoriska uzskaite</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">BaitMe maksa</span><strong>{money(summary.baitmePlatformFeeCents)}</strong><small>0,50 € par pabeigtu pasūtījumu</small></div>
+  <div className="biz-card biz-stat-card"><span className="biz-stat-label">Restorāna provizoriskie ieņēmumi</span><strong>{money(summary.netRestaurantCents)}</strong><small>Pirms atmaksām un nodokļu korekcijām</small></div>
+ </div>
+ <section className="biz-card"><div className="biz-card-head"><h2>Norēķinu statuss</h2><span className="biz-status-pill is-warning">Testa vide</span></div>
+  <p className="muted">BaitMe vēl nav pieslēgti reālie Stripe Connect pārskaitījumi, izmaksu salīdzināšana un atmaksu izpilde. Rādītās summas ir uzskaites aprēķini, nevis pārskaitīta nauda.</p>
+  <button className="secondary" onClick={()=>navigate("orders")}>Skatīt pasūtījumus</button>
+ </section></>}{tab==="details"&&<div className="biz-dashboard-grid">
+ <section className="biz-card biz-detail-card">
+  <div className="biz-card-head"><h2>Restorāna informācija</h2><span className="biz-badge-neutral">{current.role}</span></div>
+  <dl className="biz-detail-list"><div><dt>Nosaukums</dt><dd>{current.name}</dd></div>
+   <div><dt>Restorāna kods</dt><dd>{current.slug}</dd></div>
+   <div><dt>Redzamība klientiem</dt><dd>{current.published?"Publicēts":"Nav publicēts"}</dd></div>
+   <div><dt>Piegādes adrese</dt><dd>{location.pickup_address||"Nav ievadīta"}</dd></div>
+   <div><dt>Ģeogrāfiskās koordinātas</dt><dd>{location.latitude==null||location.longitude==null?"Nav ievadītas":location.latitude+", "+location.longitude}</dd></div>
+   <div><dt>Aktīvās piegādes zonas</dt><dd>{zones.filter(z=>z.active).length}</dd></div>
+   <div><dt>Ēdienkartes kategorijas</dt><dd>{categories.length}</dd></div></dl>
+  <button className="primary" onClick={()=>navigate("zones")}>Labot atrašanās vietu</button>
+ </section>
+ <section className="biz-card biz-detail-card"><h2>Par lokāciju pārvaldību</h2>
+  <p className="muted">Katram restorānam ir sava ēdienkarte, darba lokācijas koordinātas, piegādes zonas, pasūtījumi un pārskati.</p>
+  <p className="biz-info-note">Pirms restorāna publicēšanas nepieciešama uzņēmuma datu un maksājumu saņēmēja verifikācija. Publicēšana pašlaik netiek veikta automātiski.</p>
+  <a href="/apply" className="secondary biz-inline-link"><BizIcon name="plus" size={16}/> Pieteikt citu restorānu</a>
+ </section></div>}    {tab==="menu"&&<section className="panel">
      <h2>Ēdienkartes kategorijas</h2>
      <p className="muted">Kategorijas tiek saglabātas katram restorānam atsevišķi. Pogas ↑ un ↓ nosaka to secību klientu ēdienkartē.</p>
      <form onSubmit={addCategory} className="fields">
@@ -240,15 +426,9 @@ export default function Page(){
       </div>
      </div>)}
      <h2 style={{marginTop:32}}>Ēdieni</h2>
-     <form onSubmit={addMenu} className="fields">
-      <div className="field"><label>Nosaukums</label><input value={itemName} onChange={e=>setItemName(e.target.value)} required minLength={2}/></div>
-      <div className="field"><label>Kategorija</label>
-       <select value={itemCategory} onChange={e=>setItemCategory(e.target.value)} required>
-        {categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}
-       </select></div>
-      <div className="field"><label>Cena €</label><input value={itemPrice} onChange={e=>setItemPrice(e.target.value)} inputMode="decimal" placeholder="8.90" required/></div>
-      <button className="primary" disabled={busy||categories.length===0}>Pievienot ēdienu</button>
-     </form>
+     <div className="biz-section-actions"><button className="primary" onClick={()=>setAddItemOpen(true)} disabled={busy||!categories.length}>
+      <BizIcon name="plus" size={17}/> Pievienot ēdienu
+     </button></div>
      {[...menu].sort((a,b)=>{
        const rank=(x:string)=>categories.findIndex(c=>c.name===x);
        const ra=rank(a.category),rb=rank(b.category);
@@ -373,13 +553,26 @@ export default function Page(){
          <button className="toggle" disabled={busy}
           onClick={()=>void updateZone(z.id,{active:!z.active})}>{z.active?"Izslēgt":"Ieslēgt"}</button>
         </>}
-       </div>
-      </div>)}
-      <p className="notice">Piegādes zonas konfigurācija tiek saglabāta jau tagad. Klienta adreses ģeokodēšana un automātiska zonas izvēle vēl jāintegrē — līdz tam jaunajās attāluma zonās nevar izveidot apmaksājamu pasūtījumu. Tādējādi klienta paša izvēlēts attālums nevar apiet piegādes cenu.</p>
-    </section>}
-    </>}
-   </>}
-  {error&&<p className="error" role="alert">{error}</p>}
-  <p className="muted" style={{marginTop:40}}>BaitMe prototips · Reāli maksājumi un izmaksas vēl nav aktivizēti.</p>
- </main>;
+   </main>
+  </div>
+  <VenueSwitcher open={venueDialog} onClose={()=>setVenueDialog(false)} venues={restaurants}
+   currentId={rid} onSelect={id=>void selectVenue(id)}/>
+ </>}
+ {session&&addItemOpen&&<div className="biz-modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setAddItemOpen(false)}}>
+  <section className="biz-modal biz-item-modal" role="dialog" aria-modal="true" aria-label="Pievienot ēdienu">
+   <div className="biz-modal-heading"><div><p className="biz-eyebrow">Ēdienkartes redaktors</p><h2>Pievienot ēdienu</h2></div>
+    <button className="biz-icon-button" onClick={()=>setAddItemOpen(false)} aria-label="Aizvērt">×</button></div>
+   <form onSubmit={addMenu} className="biz-item-form">
+    <label>Ēdiena nosaukums<input value={itemName} onChange={e=>setItemName(e.target.value)} minLength={2} maxLength={100} placeholder="Piemēram, Liellopa burgers" required/></label>
+    <label>Apraksts<textarea value={itemDescription} onChange={e=>setItemDescription(e.target.value)} maxLength={500} rows={3} placeholder="Sastāvdaļas un īss apraksts"/></label>
+    <div className="biz-form-duo">
+     <label>Kategorija<select value={itemCategory} onChange={e=>setItemCategory(e.target.value)} required>{categories.map(c=><option key={c.id} value={c.name}>{c.name}</option>)}</select></label>
+     <label>Cena (€)<input value={itemPrice} onChange={e=>setItemPrice(e.target.value)} inputMode="decimal" placeholder="8,90" required/></label>
+    </div>
+    <div className="biz-item-photo"><BizIcon name="menu" size={23}/><span><strong>Produkta attēls</strong><small>Attēlu augšupielādei vēl jāpieslēdz droša failu glabātuve. Esošu ēdienu attēli paliek saglabāti.</small></span></div>
+    <div className="biz-modal-actions"><button type="button" className="secondary" onClick={()=>setAddItemOpen(false)}>Atcelt</button>
+     <button type="submit" disabled={busy||!categories.length} className="primary">Saglabāt ēdienu</button></div>
+   </form>
+  </section></div>}
+ </div>;
 }
